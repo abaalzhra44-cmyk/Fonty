@@ -1,0 +1,6 @@
+{
+  "name": "Doctor Fonts",
+  "description": "دكتور الخطوط - منصة احترافية لتحويل الحروف والمخطوطات إلى خطوط طباعية TTF/OTF",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
