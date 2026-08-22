@@ -47,14 +47,14 @@ export const WelcomePage: React.FC = () => {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
           <button
             onClick={() => openAuthModal('signup')}
-            className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white font-heading font-bold text-base shadow-2xl shadow-sky-500/30 flex items-center justify-center gap-3 transition-all hover:scale-105 active:scale-95"
+            className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white font-heading font-bold text-base shadow-2xl shadow-sky-500/30 flex items-center justify-center gap-3 transition-all hover:scale-105 active:scale-95 border border-white/40"
           >
             <IconUser size={20} />
             <span>إنشاء حساب جديد والبدء</span>
           </button>
           <button
             onClick={() => openAuthModal('login')}
-            className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 font-heading font-bold text-base shadow-sm flex items-center justify-center gap-2.5 transition-all hover:scale-105 active:scale-95"
+            className="w-full sm:w-auto px-8 py-4 rounded-2xl liquid-glass-button text-slate-800 font-heading font-bold text-base shadow-sm flex items-center justify-center gap-2.5 transition-all hover:scale-105 active:scale-95 border border-white/80"
           >
             <IconLogIn size={20} className="text-sky-600" />
             <span>تسجيل الدخول للحساب</span>
@@ -78,53 +78,53 @@ export const WelcomePage: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Step 1 */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 space-y-4 hover:border-sky-500/50 transition-all shadow-lg relative group">
-            <div className="w-10 h-10 rounded-2xl bg-sky-500/10 text-sky-600 font-heading font-black text-lg flex items-center justify-center">
+          <div className="liquid-glass-card p-6 space-y-4 hover:border-sky-500/50 transition-all relative group border border-white/80">
+            <div className="w-10 h-10 rounded-2xl bg-sky-500/15 text-sky-600 font-heading font-black text-lg flex items-center justify-center border border-sky-400/20 shadow-xs">
               1
             </div>
             <h3 className="font-heading font-bold text-lg text-slate-900">
               رفع المخطوطة والحروف
             </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
+            <p className="text-xs text-slate-600 leading-relaxed font-body">
               ارفع صور الحروف أو ارسمها مباشرة واستخرج المتجهات SVG النظيفة مع ضبط النواحي التلقائي.
             </p>
           </div>
 
           {/* Step 2 */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 space-y-4 hover:border-sky-500/50 transition-all shadow-lg relative group">
-            <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-600 font-heading font-black text-lg flex items-center justify-center">
+          <div className="liquid-glass-card p-6 space-y-4 hover:border-sky-500/50 transition-all relative group border border-white/80">
+            <div className="w-10 h-10 rounded-2xl bg-blue-500/15 text-blue-600 font-heading font-black text-lg flex items-center justify-center border border-blue-400/20 shadow-xs">
               2
             </div>
             <h3 className="font-heading font-bold text-lg text-slate-900">
               تحديد قواعد GSUB
             </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
+            <p className="text-xs text-slate-600 leading-relaxed font-body">
               أضف التراكيب الخطية والبدائل الجمالية واستبدال الكلمات التلقائي للخط العربي.
             </p>
           </div>
 
           {/* Step 3 */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 space-y-4 hover:border-sky-500/50 transition-all shadow-lg relative group">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-600 font-heading font-black text-lg flex items-center justify-center">
+          <div className="liquid-glass-card p-6 space-y-4 hover:border-sky-500/50 transition-all relative group border border-white/80">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-500/15 text-indigo-600 font-heading font-black text-lg flex items-center justify-center border border-indigo-400/20 shadow-xs">
               3
             </div>
             <h3 className="font-heading font-bold text-lg text-slate-900">
               معايرة المقاييس
             </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
+            <p className="text-xs text-slate-600 leading-relaxed font-body">
               افحص خط القاعدة، أبعاد التقدم (Advance Width)، وتوازن المسافات عبر المفتش البصري.
             </p>
           </div>
 
           {/* Step 4 */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 space-y-4 hover:border-sky-500/50 transition-all shadow-lg relative group">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 font-heading font-black text-lg flex items-center justify-center">
+          <div className="liquid-glass-card p-6 space-y-4 hover:border-sky-500/50 transition-all relative group border border-white/80">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 font-heading font-black text-lg flex items-center justify-center border border-emerald-400/20 shadow-xs">
               4
             </div>
             <h3 className="font-heading font-bold text-lg text-slate-900">
               التصدير والاستخدام
             </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
+            <p className="text-xs text-slate-600 leading-relaxed font-body">
               حمل ملف TTF الحقيقي واستخدمه فوراً في برامج التصميم كـ Photoshop, Illustrator, وWord.
             </p>
           </div>
@@ -133,56 +133,56 @@ export const WelcomePage: React.FC = () => {
 
       {/* Feature Capabilities Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="p-6 rounded-3xl bg-slate-50 border border-slate-200 space-y-3">
-          <div className="w-10 h-10 rounded-2xl bg-sky-500/10 text-sky-600 flex items-center justify-center">
+        <div className="p-6 rounded-3xl liquid-glass-card space-y-3 border border-white/80">
+          <div className="w-10 h-10 rounded-2xl bg-sky-500/15 text-sky-600 flex items-center justify-center border border-sky-400/20 shadow-xs">
             <IconZap size={22} />
           </div>
           <h3 className="font-heading font-bold text-base text-slate-900">
             تصدير TTF حقيقي 100%
           </h3>
-          <p className="text-xs text-slate-600 leading-relaxed">
+          <p className="text-xs text-slate-600 leading-relaxed font-body">
             توليد بنية OpenType كاملة متوافقة مع كافة أنظمة التشغيل ومختلف التطبيقات والتطبيقات المدمجة.
           </p>
         </div>
 
-        <div className="p-6 rounded-3xl bg-slate-50 border border-slate-200 space-y-3">
-          <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
+        <div className="p-6 rounded-3xl liquid-glass-card space-y-3 border border-white/80">
+          <div className="w-10 h-10 rounded-2xl bg-indigo-500/15 text-indigo-600 flex items-center justify-center border border-indigo-400/20 shadow-xs">
             <IconLayers size={22} />
           </div>
           <h3 className="font-heading font-bold text-base text-slate-900">
             تراكيب وبدائل معقدة
           </h3>
-          <p className="text-xs text-slate-600 leading-relaxed">
+          <p className="text-xs text-slate-600 leading-relaxed font-body">
             ربط الحروف والمركبات بسهولة مع مراعاة خصائص الخط العربي والأشكال المتصلة والمنفصلة.
           </p>
         </div>
 
-        <div className="p-6 rounded-3xl bg-slate-50 border border-slate-200 space-y-3">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+        <div className="p-6 rounded-3xl liquid-glass-card space-y-3 border border-white/80">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 flex items-center justify-center border border-emerald-400/20 shadow-xs">
             <IconCheck size={22} />
           </div>
           <h3 className="font-heading font-bold text-base text-slate-900">
             حفظ محلي وأمان كامل
           </h3>
-          <p className="text-xs text-slate-600 leading-relaxed">
+          <p className="text-xs text-slate-600 leading-relaxed font-body">
             جميع مشاريعك وخطوطك تُحفظ بأمان داخل متصفحك مع إمكانية التصدير والاسترجاع في أي وقت.
           </p>
         </div>
       </div>
 
       {/* Bottom Sign up Call To Action Banner */}
-      <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-br from-slate-900 via-sky-950 to-indigo-950 text-white shadow-2xl relative overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-6 border border-slate-800">
-        <div className="space-y-2 text-center sm:text-right">
-          <h2 className="font-heading font-extrabold text-2xl sm:text-3xl">
+      <div className="p-8 sm:p-12 rounded-[2.5rem] liquid-glass-card text-slate-900 shadow-2xl relative overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-6 border border-white/90">
+        <div className="space-y-2 text-center sm:text-right relative z-10">
+          <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-slate-900">
             جاهز لبدء ابتكار خطك العربي الخاص؟
           </h2>
-          <p className="text-xs sm:text-sm text-sky-200">
+          <p className="text-xs sm:text-sm text-slate-600 font-body">
             أنشئ حسابك الفاخر مجاناً الآن واستمتع بتجربة تصميم المخطوطات الرقمية المتقدمة.
           </p>
         </div>
         <button
           onClick={() => openAuthModal('signup')}
-          className="px-8 py-4 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-heading font-bold text-sm shadow-xl flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shrink-0"
+          className="px-8 py-4 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white font-heading font-bold text-sm shadow-xl shadow-sky-500/25 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shrink-0 border border-white/30 relative z-10"
         >
           <span>أنشئ حسابك الفاخر الآن</span>
           <IconArrowLeft size={18} />

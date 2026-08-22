@@ -120,17 +120,17 @@ export const AccountPage: React.FC = () => {
       )}
 
       {/* Main Profile Box */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 space-y-6 shadow-xl transition-all">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+      <div className="liquid-glass-card p-6 md:p-8 space-y-6 shadow-2xl transition-all border border-white/80">
+        <div className="flex items-center justify-between border-b border-white/60 pb-4">
           <h2 className="font-heading font-bold text-lg text-slate-900">
             بيانات الحساب الشخصي
           </h2>
           {!isEditing ? (
             <button
               onClick={() => setIsEditing(true)}
-              className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1.5 transition-colors"
+              className="px-3.5 py-1.5 rounded-xl liquid-glass-button text-slate-800 text-xs font-bold flex items-center gap-1.5 transition-colors border border-white/80"
             >
-              <IconEdit size={14} className="text-sky-500" />
+              <IconEdit size={14} className="text-sky-600" />
               <span>تعديل البيانات</span>
             </button>
           ) : (
@@ -149,20 +149,20 @@ export const AccountPage: React.FC = () => {
         </div>
 
         {!isEditing ? (
-          <div className="space-y-4 text-sm">
+          <div className="space-y-4 text-sm font-body">
             <div>
-              <span className="block text-xs text-slate-500 mb-1">اسم المستخدم:</span>
-              <p className="font-bold text-slate-900">{user.username}</p>
+              <span className="block text-xs text-slate-500 mb-1 font-medium">اسم المستخدم:</span>
+              <p className="font-bold text-slate-900 font-heading">{user.username}</p>
             </div>
 
             <div>
-              <span className="block text-xs text-slate-500 mb-1">البريد الإلكتروني:</span>
-              <p className="font-bold text-slate-900">{user.email}</p>
+              <span className="block text-xs text-slate-500 mb-1 font-medium">البريد الإلكتروني:</span>
+              <p className="font-bold text-slate-900 font-mono text-xs">{user.email}</p>
             </div>
 
             <div>
-              <span className="block text-xs text-slate-500 mb-1">حالة التخزين والخصوصية:</span>
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-2">
+              <span className="block text-xs text-slate-500 mb-1 font-medium">حالة التخزين والخصوصية:</span>
+              <div className="p-3.5 rounded-2xl bg-white/40 backdrop-blur-md border border-white/70 text-xs text-slate-600 space-y-2">
                 <div className="flex items-center gap-2 text-slate-800">
                   <IconCheck size={16} className="text-sky-600" />
                   <span>جميع مشاريعك وخطوطك مرتبطة بحسابك المحلي بأمان عالي.</span>
@@ -171,7 +171,7 @@ export const AccountPage: React.FC = () => {
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSaveProfile} className="space-y-4">
+          <form onSubmit={handleSaveProfile} className="space-y-4 font-body">
             {/* Avatar Picker */}
             <div className="space-y-2">
               <label className="block text-xs font-bold text-slate-700">
@@ -187,7 +187,7 @@ export const AccountPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="absolute -bottom-1 -right-1 p-1.5 rounded-full bg-sky-600 text-white hover:bg-sky-500 transition-colors"
+                    className="absolute -bottom-1 -right-1 p-1.5 rounded-full bg-sky-600 text-white hover:bg-sky-500 transition-colors shadow-sm"
                   >
                     <IconCamera size={14} />
                   </button>
@@ -234,7 +234,7 @@ export const AccountPage: React.FC = () => {
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900"
+                className="w-full px-4 py-2.5 rounded-xl liquid-glass-input text-sm text-slate-900 border border-white/80 focus:outline-none"
               />
             </div>
 
@@ -248,13 +248,13 @@ export const AccountPage: React.FC = () => {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900"
+                className="w-full px-4 py-2.5 rounded-xl liquid-glass-input text-sm text-slate-900 border border-white/80 focus:outline-none"
               />
             </div>
 
             <button
               type="submit"
-              className="w-full py-3 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm shadow-lg shadow-sky-500/20"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 hover:from-sky-500 hover:to-blue-600 text-white font-bold text-sm shadow-lg shadow-sky-500/25 border border-white/30 transition-all hover:scale-[1.01]"
             >
               حفظ التغييرات
             </button>
@@ -262,10 +262,10 @@ export const AccountPage: React.FC = () => {
         )}
 
         {/* Logout button */}
-        <div className="pt-4 border-t border-slate-200">
+        <div className="pt-4 border-t border-white/60">
           <button
             onClick={logout}
-            className="w-full py-3 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+            className="w-full py-3 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 font-bold text-xs flex items-center justify-center gap-2 transition-colors border border-rose-500/20"
           >
             <IconLogout size={16} />
             <span>تسجيل الخروج من الحساب</span>
@@ -274,7 +274,7 @@ export const AccountPage: React.FC = () => {
       </div>
 
       {/* App Version Info Card */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 flex items-center justify-between text-xs text-slate-500 shadow-sm">
+      <div className="liquid-glass-card p-6 flex items-center justify-between text-xs text-slate-500 shadow-sm border border-white/80">
         <div className="flex items-center gap-2">
           <IconSparkles size={18} className="text-sky-600" />
           <span className="font-heading font-bold text-slate-900">Doctor Fonts v1.0.0</span>
