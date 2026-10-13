@@ -62,7 +62,7 @@ const MainAppContent: React.FC = () => {
 
   if (isMaintenanceMode && !isAdmin) {
     return (
-      <div className="min-h-screen bg-[#f8f9fa] text-[#0f172a] flex flex-col font-body transition-colors duration-300 relative overflow-x-hidden">
+      <div className="min-h-screen bg-slate-50/90 text-[#0f172a] flex flex-col font-body transition-colors duration-300 relative overflow-x-hidden">
         <AnimatedBackground />
         <MaintenancePage />
         <AuthModal />
@@ -71,7 +71,7 @@ const MainAppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f9fa] text-[#0f172a] flex flex-col font-body transition-colors duration-300 relative selection:bg-sky-500/20 selection:text-sky-800 overflow-x-hidden">
+    <div className="min-h-screen bg-slate-50/90 text-[#0f172a] flex flex-col font-body transition-colors duration-300 relative selection:bg-sky-500/20 selection:text-sky-800 overflow-x-hidden">
       {/* Announcement Banner */}
       {announcementActive && announcementMsg && (
         <div className="bg-gradient-to-r from-sky-600 via-indigo-600 to-sky-700 text-white text-xs py-2 px-4 text-center font-medium shadow-sm relative z-30 flex items-center justify-center gap-2">
@@ -80,7 +80,7 @@ const MainAppContent: React.FC = () => {
         </div>
       )}
 
-      {/* Animated Background */}
+      {/* Ambient Gradient Mesh Background (Liquid Glass Aesthetic) */}
       <AnimatedBackground />
 
       {/* Top Sticky Header */}
