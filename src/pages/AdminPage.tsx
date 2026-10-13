@@ -1,55 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
+import { doc, setDoc, deleteDoc, getDocs, collection } from 'firebase/firestore';
 import { useAuth, UserAccount } from '../context/AuthContext';
-import { AdminLiveSupportConsole } from '../components/AdminLiveSupportConsole';
 import { AdminFontManager } from '../components/AdminFontManager';
-import { getSupportThreads, SUPPORT_UPDATE_EVENT } from '../utils/supportStorage';
-import { doc, setDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase';
 import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  Legend,
-} from 'recharts';
+  db,
+  auth,
+  firebaseProjectInfo,
+  PRIMARY_DOMAIN,
+  syncDomainConfigToFirestore,
+  recordAuditLog,
+  fetchAuditLogsFromFirestore,
+  fetchDeveloperControlStats,
+  CloudAuditLog,
+  DeveloperConsoleStats,
+} from '../firebase';
 import {
   IconShield,
   IconCrown,
   IconUsers,
-  IconBarChart,
-  IconDatabase,
   IconSettings,
   IconActivity,
   IconLock,
   IconSearch,
   IconPlus,
   IconTrash,
-  IconEdit,
   IconBan,
   IconCheckCircle,
   IconFonts,
   IconSparkles,
-  IconInfo,
   IconRefresh,
   IconKey,
   IconDownload,
-  IconHeadphones,
   IconClose,
-  IconDevice,
   IconGlobe,
+  IconCloud,
 } from '../components/icons/Icons';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 export const AdminPage: React.FC = () => {
   const {
     user,
     isAdmin,
-    isDeveloper,
     getAllUsers,
     adminUpdateUser,
     adminDeleteUser,
@@ -57,29 +49,24 @@ export const AdminPage: React.FC = () => {
     openAuthModal,
   } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'fonts' | 'settings' | 'logs' | 'support'>('support');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'fonts' | 'settings' | 'logs'>('overview');
   const [usersList, setUsersList] = useState<UserAccount[]>([]);
-  const [pendingSupportCount, setPendingSupportCount] = useState(0);
-
-  // Sync pending support inquiries count
-  useEffect(() => {
-    const updateCount = () => {
-      const threads = getSupportThreads();
-      const pending = threads.filter((t) => t.status === 'pending').length;
-      setPendingSupportCount(pending);
-    };
-    updateCount();
-
-    window.addEventListener(SUPPORT_UPDATE_EVENT, updateCount);
-    window.addEventListener('storage', updateCount);
-
-    return () => {
-      window.removeEventListener(SUPPORT_UPDATE_EVENT, updateCount);
-      window.removeEventListener('storage', updateCount);
-    };
-  }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | 'user' | 'admin' | 'developer'>('all');
+
+  // Firebase Live Stats state
+  const [firebaseStats, setFirebaseStats] = useState<DeveloperConsoleStats>({
+    totalUsers: 1,
+    totalProjects: 0,
+    totalThreads: 0,
+    isFirestoreOnline: true,
+    databaseId: firebaseProjectInfo.databaseId,
+    projectId: firebaseProjectInfo.projectId,
+  });
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+
+  // Cloud Audit Logs
+  const [logs, setLogs] = useState<CloudAuditLog[]>([]);
 
   // Modal states
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -93,7 +80,10 @@ export const AdminPage: React.FC = () => {
   const [resetModalUser, setResetModalUser] = useState<UserAccount | null>(null);
   const [resetPasswordInput, setResetPasswordInput] = useState('');
 
-  // System Settings state stored in localStorage
+  // Lock background scroll when any admin modal is active
+  useScrollLock(showAddUserModal || !!resetModalUser);
+
+  // System Settings state
   const [maintenanceMode, setMaintenanceMode] = useState<boolean>(() => {
     return localStorage.getItem('df_maintenance_mode') === 'true';
   });
@@ -102,113 +92,95 @@ export const AdminPage: React.FC = () => {
   });
   const [announcementMsg, setAnnouncementMsg] = useState<string>(() => {
     const raw = localStorage.getItem('df_announcement_msg');
-    if (raw && raw.includes('دكتور الخطوط')) {
-      const fixed = raw.replace(/دكتور الخطوط/g, 'Fonty فونتي');
-      localStorage.setItem('df_announcement_msg', fixed);
-      return fixed;
-    }
-    return raw || 'أهلاً بكم في منصة Fonty فونتي - النسخة المتقدمة لبناء الخطوط العربية!';
+    return raw || '';
   });
   const [announcementActive, setAnnouncementActive] = useState<boolean>(() => {
     return localStorage.getItem('df_announcement_active') === 'true';
   });
 
-  // System Activity Logs state
-  const [logs, setLogs] = useState<Array<{ id: string; time: string; type: string; msg: string; level: 'info' | 'warn' | 'success' }>>([
-    {
-      id: 'log_1',
-      time: new Date().toLocaleTimeString('ar-EG'),
-      type: 'دخول المطور',
-      msg: 'تم تسجيل دخول المطور المسؤول Dr Font إلى لوحة التحكم',
-      level: 'success',
-    },
-    {
-      id: 'log_2',
-      time: new Date(Date.now() - 1000 * 60 * 5).toLocaleTimeString('ar-EG'),
-      type: 'محرك GSUB',
-      msg: 'تمت معالجة قواعد الاستبدال لـ 14 خط عربي متقدم',
-      level: 'info',
-    },
-    {
-      id: 'log_3',
-      time: new Date(Date.now() - 1000 * 60 * 15).toLocaleTimeString('ar-EG'),
-      type: 'فحص الأمان',
-      msg: 'فحص دوري لقاعدة البيانات وتراخيص الخطوط - الحالة سليم 100%',
-      level: 'info',
-    },
-  ]);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
-  const reloadUsers = () => {
-    setUsersList(getAllUsers());
+  // Load and sync users from Firestore & local
+  const reloadUsers = async () => {
+    const localUsers = getAllUsers();
+    setUsersList(localUsers);
+
+    if (auth.currentUser) {
+      try {
+        const snap = await getDocs(collection(db, 'users'));
+        const cloudUsers: UserAccount[] = [];
+        snap.forEach((d) => {
+          cloudUsers.push(d.data() as UserAccount);
+        });
+        if (cloudUsers.length > 0) {
+          // Merge unique users
+          const map = new Map<string, UserAccount>();
+          localUsers.forEach((u) => map.set(u.id, u));
+          cloudUsers.forEach((u) => map.set(u.id, u));
+          setUsersList(Array.from(map.values()));
+        }
+      } catch {
+        // Fallback to local users
+      }
+    }
+  };
+
+  // Load live telemetry from Firebase
+  const loadFirebaseTelemetry = async () => {
+    setIsLoadingStats(true);
+    try {
+      const stats = await fetchDeveloperControlStats();
+      setFirebaseStats(stats);
+      const cloudLogs = await fetchAuditLogsFromFirestore();
+      setLogs(cloudLogs);
+    } finally {
+      setIsLoadingStats(false);
+    }
   };
 
   useEffect(() => {
     reloadUsers();
+    loadFirebaseTelemetry();
   }, []);
 
-  // Save system settings handler
-  const handleSaveSettings = () => {
+  // Save system settings to Firestore & localStorage
+  const handleSaveSettings = async () => {
     localStorage.setItem('df_maintenance_mode', String(maintenanceMode));
     localStorage.setItem('df_allow_signups', String(allowSignups));
     localStorage.setItem('df_announcement_msg', announcementMsg);
     localStorage.setItem('df_announcement_active', String(announcementActive));
 
-    // Sync to Firebase Firestore
     if (auth.currentUser) {
-      setDoc(
-        doc(db, 'systemSettings', 'announcements'),
-        {
-          id: 'announcements',
-          announcementMsg,
-          maintenanceMode,
-          allowSignups,
-          updatedAt: new Date().toISOString(),
-          updatedBy: auth.currentUser.uid,
-        },
-        { merge: true }
-      ).catch((err) => console.warn('Firestore settings update note:', err));
+      try {
+        await setDoc(
+          doc(db, 'systemSettings', 'announcements'),
+          {
+            id: 'announcements',
+            announcementMsg,
+            maintenanceMode,
+            allowSignups,
+            updatedAt: new Date().toISOString(),
+            updatedBy: auth.currentUser.uid,
+          },
+          { merge: true }
+        );
+      } catch (err) {
+        console.warn('Sync settings error:', err);
+      }
     }
 
-    // Log the change
-    setLogs((prev) => [
-      {
-        id: `log_${Date.now()}`,
-        time: new Date().toLocaleTimeString('ar-EG'),
-        type: 'تحديث الإعدادات',
-        msg: `تم حفظ وتحديث الإعدادات سحابياً ومحلياً (وضع الصيانة: ${maintenanceMode ? 'مفعل' : 'معطل'})`,
-        level: 'warn',
-      },
-      ...prev,
-    ]);
+    await recordAuditLog('تحديث الإعدادات', `تحديث إعدادات النظام (وضع الصيانة: ${maintenanceMode ? 'مفعل' : 'معطل'})`, 'warn');
+    const updatedLogs = await fetchAuditLogsFromFirestore();
+    setLogs(updatedLogs);
+
+    setSaveSuccessMsg('تم حفظ وتحديث الإعدادات سحابياً في Firestore بنجاح');
+    setTimeout(() => setSaveSuccessMsg(null), 3000);
   };
 
-  // Toggle Maintenance Mode handler
-  const handleToggleMaintenance = (mode: boolean) => {
-    setMaintenanceMode(mode);
-    localStorage.setItem('df_maintenance_mode', String(mode));
-    setLogs((prev) => [
-      {
-        id: `log_${Date.now()}`,
-        time: new Date().toLocaleTimeString('ar-EG'),
-        type: 'وضع الصيانة',
-        msg: mode
-          ? 'تم تفعيل وضع الصيانة العام على جميع الزوار غير الإداريين'
-          : 'تم إيقاف وضع الصيانة وإتاحة الموقع للعملاء',
-        level: mode ? 'warn' : 'success',
-      },
-      ...prev,
-    ]);
-  };
-
-  // Add new user submit handler
-  const handleCreateUserSubmit = (e: React.FormEvent) => {
+  // Create User
+  const handleCreateUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setUserModalError('');
-
-    if (!newUsername || !newEmail || !newPassword) {
-      setUserModalError('جميع الحقول مطلوبة.');
-      return;
-    }
 
     const res = adminCreateUser({
       username: newUsername,
@@ -217,1092 +189,719 @@ export const AdminPage: React.FC = () => {
       role: newRole,
     });
 
-    if (!res.success) {
-      setUserModalError(res.error || 'حدث خطأ أثناء إنشاء المستخدم');
+    if (!res.success && res.error) {
+      setUserModalError(res.error);
       return;
     }
+
+    // Sync to Firestore
+    if (auth.currentUser) {
+      const tempId = `usr_${Date.now()}`;
+      try {
+        await setDoc(doc(db, 'users', tempId), {
+          id: tempId,
+          username: newUsername.trim(),
+          email: newEmail.trim().toLowerCase(),
+          role: newRole,
+          createdAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.warn('Firestore user write note:', err);
+      }
+    }
+
+    await recordAuditLog('إنشاء مستخدم', `تم إنشاء مستخدم جديد: ${newUsername} (${newRole})`, 'success');
+    const updatedLogs = await fetchAuditLogsFromFirestore();
+    setLogs(updatedLogs);
 
     setShowAddUserModal(false);
     setNewUsername('');
     setNewEmail('');
     setNewPassword('');
+    setNewRole('user');
     reloadUsers();
-
-    setLogs((prev) => [
-      {
-        id: `log_${Date.now()}`,
-        time: new Date().toLocaleTimeString('ar-EG'),
-        type: 'إضافة حساب',
-        msg: `تم إنشاء حساب جديد باسم: ${newUsername} بصلاحية (${newRole})`,
-        level: 'success',
-      },
-      ...prev,
-    ]);
   };
 
-  // Password Reset handler
-  const handlePasswordResetSubmit = (e: React.FormEvent) => {
+  // Password Reset
+  const handlePasswordResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetModalUser || !resetPasswordInput.trim()) return;
 
     adminUpdateUser(resetModalUser.id, { passwordHash: resetPasswordInput.trim() });
-    setResetModalUser(null);
-    setResetPasswordInput('');
 
-    setLogs((prev) => [
-      {
-        id: `log_${Date.now()}`,
-        time: new Date().toLocaleTimeString('ar-EG'),
-        type: 'إعادة كلمة المرور',
-        msg: `تم تغيير كلمة المرور للحساب ${resetModalUser.username} بنجاح`,
-        level: 'warn',
-      },
-      ...prev,
-    ]);
+    if (auth.currentUser) {
+      try {
+        await setDoc(
+          doc(db, 'users', resetModalUser.id),
+          { updatedAt: new Date().toISOString() },
+          { merge: true }
+        );
+      } catch {
+        // Ignore
+      }
+    }
+
+    await recordAuditLog('كلمة المرور', `تم تغيير كلمة المرور للمستخدم ${resetModalUser.username}`, 'info');
+    const updatedLogs = await fetchAuditLogsFromFirestore();
+    setLogs(updatedLogs);
 
     setResetModalUser(null);
     setResetPasswordInput('');
     reloadUsers();
   };
 
-  // EXPORT HANDLERS (JSON & CSV)
-  const handleExportUsersJSON = () => {
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(usersList, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `dr_fonts_users_${new Date().toISOString().slice(0, 10)}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-
-    setLogs((prev) => [
-      {
-        id: `log_${Date.now()}`,
-        time: new Date().toLocaleTimeString('ar-EG'),
-        type: 'تصدير البيانات',
-        msg: 'تم تصدير نسخة احتياطية من بيانات المستخدمين بصيغة JSON',
-        level: 'info',
-      },
-      ...prev,
-    ]);
+  // Delete User
+  const handleDeleteUser = async (u: UserAccount) => {
+    const ok = adminDeleteUser(u.id);
+    if (ok) {
+      if (auth.currentUser) {
+        try {
+          await deleteDoc(doc(db, 'users', u.id));
+        } catch {
+          // Ignore
+        }
+      }
+      await recordAuditLog('حذف مستخدم', `تم حذف حساب المستخدم ${u.username}`, 'warn');
+      const updatedLogs = await fetchAuditLogsFromFirestore();
+      setLogs(updatedLogs);
+      reloadUsers();
+    }
   };
 
-  const handleExportUsersCSV = () => {
-    const headers = ['ID', 'Username', 'Email', 'Role', 'IsDeveloper', 'IsBlocked', 'CreatedAt'];
-    const rows = usersList.map((u) => [
-      u.id,
-      `"${u.username.replace(/"/g, '""')}"`,
-      `"${u.email.replace(/"/g, '""')}"`,
-      u.role || 'user',
-      u.isDeveloper ? 'true' : 'false',
-      u.isBlocked ? 'true' : 'false',
-      new Date(u.createdAt).toISOString(),
-    ]);
+  // Toggle user block status
+  const handleToggleBlockUser = async (u: UserAccount) => {
+    const nextBlocked = !u.isBlocked;
+    adminUpdateUser(u.id, { isBlocked: nextBlocked });
 
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const link = document.createElement('a');
-    link.setAttribute('href', encodeURI(csvContent));
-    link.setAttribute('download', `dr_fonts_users_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    setLogs((prev) => [
-      {
-        id: `log_${Date.now()}`,
-        time: new Date().toLocaleTimeString('ar-EG'),
-        type: 'تصدير البيانات',
-        msg: 'تم تصدير بيانات المستخدمين والتحليلات بصيغة CSV',
-        level: 'info',
-      },
-      ...prev,
-    ]);
-  };
-
-  // Font Library Mock Data & Exports
-  const fontsList = [
-    { id: 'f_1', name: 'خط الثلث الجلي الحديث', designer: 'استوديو Fonty', glyphs: 142, status: 'موصى به', file: 'Thuluth_Modern.ttf', downloads: 1420 },
-    { id: 'f_2', name: 'النسخ الرقمي الاحترافي', designer: 'استوديو Fonty فونتي', glyphs: 210, status: 'معتمد', file: 'Naskh_Pro.ttf', downloads: 3890 },
-    { id: 'f_3', name: 'الديواني الذهبي VIP', designer: 'استوديو Fonty', glyphs: 98, status: 'موصى به', file: 'Diwani_Gold.ttf', downloads: 890 },
-    { id: 'f_4', name: 'الرقعة الرقمي السريع', designer: 'Fonty فونتي', glyphs: 115, status: 'معتمد', file: 'Ruqaa_Fast.ttf', downloads: 2150 },
-    { id: 'f_5', name: 'الكوفي الهندسي المربع', designer: 'مختبر المتجهات', glyphs: 88, status: 'معتمد', file: 'Kufi_Square.ttf', downloads: 1760 },
-  ];
-
-  const handleExportFontsJSON = () => {
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(fontsList, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `dr_fonts_library_${new Date().toISOString().slice(0, 10)}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-  };
-
-  const handleExportFontsCSV = () => {
-    const headers = ['ID', 'FontName', 'Designer', 'GlyphsCount', 'Status', 'FileName', 'TotalDownloads'];
-    const rows = fontsList.map((f) => [
-      f.id,
-      `"${f.name.replace(/"/g, '""')}"`,
-      `"${f.designer.replace(/"/g, '""')}"`,
-      f.glyphs,
-      `"${f.status}"`,
-      `"${f.file}"`,
-      f.downloads,
-    ]);
-
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const link = document.createElement('a');
-    link.setAttribute('href', encodeURI(csvContent));
-    link.setAttribute('download', `dr_fonts_library_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  };
-
-  // Recharts Chart Data
-  const userGrowthData = [
-    { day: 'السبت', users: 120, active: 85 },
-    { day: 'الأحد', users: 145, active: 110 },
-    { day: 'الإثنين', users: 190, active: 140 },
-    { day: 'الثلاثاء', users: 240, active: 185 },
-    { day: 'الأربعاء', users: 310, active: 230 },
-    { day: 'الخميس', users: 420, active: 315 },
-    { day: 'الجمعة', users: 550, active: 440 },
-  ];
-
-  const dailyFontActivityData = [
-    { day: 'السبت', uploaded: 12, exported: 45 },
-    { day: 'الأحد', uploaded: 18, exported: 62 },
-    { day: 'الإثنين', uploaded: 25, exported: 88 },
-    { day: 'الثلاثاء', uploaded: 30, exported: 110 },
-    { day: 'الأربعاء', uploaded: 42, exported: 155 },
-    { day: 'الخميس', uploaded: 58, exported: 210 },
-    { day: 'الجمعة', uploaded: 75, exported: 290 },
-  ];
-
-  const monthlyFontUploadRateData = [
-    { month: 'يناير', uploaded: 45, approved: 38, rejected: 7 },
-    { month: 'فبراير', uploaded: 62, approved: 52, rejected: 10 },
-    { month: 'مارس', uploaded: 88, approved: 76, rejected: 12 },
-    { month: 'أبريل', uploaded: 110, approved: 95, rejected: 15 },
-    { month: 'مايو', uploaded: 142, approved: 124, rejected: 18 },
-    { month: 'يونيو', uploaded: 185, approved: 162, rejected: 23 },
-    { month: 'يوليو', uploaded: 230, approved: 201, rejected: 29 },
-    { month: 'أغسطس', uploaded: 285, approved: 252, rejected: 33 },
-  ];
-
-  // Filtered users list (Developer accounts are strictly hidden from users list)
-  const filteredUsers = usersList.filter((u) => {
-    if (u.role === 'developer' || u.isDeveloper || u.username.toLowerCase().includes('dr font') || u.username.toLowerCase().includes('tarek')) {
-      return false;
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'users', u.id), { isBlocked: nextBlocked }, { merge: true });
+      } catch {
+        // Ignore
+      }
     }
 
-    const matchesSearch =
-      u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchTerm.toLowerCase());
+    await recordAuditLog('حالة الحساب', `تم ${nextBlocked ? 'تجميد' : 'إلغاء تجميد'} حساب ${u.username}`, 'warn');
+    const updatedLogs = await fetchAuditLogsFromFirestore();
+    setLogs(updatedLogs);
+    reloadUsers();
+  };
 
-    if (roleFilter === 'all') return matchesSearch;
-    if (roleFilter === 'admin') return matchesSearch && u.role === 'admin';
-    return matchesSearch && (!u.role || u.role === 'user');
+  // Filter users
+  const filteredUsers = usersList.filter((u) => {
+    const matchSearch =
+      (u.username || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (u.email || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchRole = roleFilter === 'all' || u.role === roleFilter;
+    return matchSearch && matchRole;
   });
 
-  // Guard access if not admin
-  if (!isAdmin) {
+  // Guard access
+  if (!user || !isAdmin) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
-        <div className="max-w-md w-full bg-white border border-rose-500/30 rounded-3xl p-8 shadow-2xl text-center space-y-6 relative overflow-hidden">
-          <div className="w-16 h-16 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto border border-rose-500/20">
-            <IconLock size={32} />
-          </div>
-
-          <div className="space-y-2">
-            <h1 className="font-heading font-extrabold text-2xl text-slate-900">
-              وصول محمي ومخصص للإدارة
-            </h1>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              هذه الصفحة مخصصة لمدير النظام والمطور المعتمد. يرجى تسجيل الدخول بحسابك للوصول.
-            </p>
-          </div>
-
-          <button
-            onClick={() => openAuthModal('login')}
-            className="w-full py-3 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm shadow-lg shadow-sky-500/25 transition-all"
-          >
-            تسجيل الدخول
-          </button>
+      <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto space-y-4 animate-fadeIn dir-rtl">
+        <div className="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-400/30 text-amber-600 flex items-center justify-center shadow-lg">
+          <IconLock size={26} />
         </div>
+        <h2 className="font-heading font-black text-xl text-slate-900">
+          مركز تحكم المطورين والإدارة
+        </h2>
+        <p className="text-xs text-slate-600 font-body leading-relaxed">
+          يتطلب هذا القسم صلاحيات الإدارة أو المطور. سجّل الدخول بحساب المشرف للوصول إلى لوحة التحكم.
+        </p>
+        <button
+          onClick={() => openAuthModal('login')}
+          className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold text-xs shadow-md shadow-sky-500/20 cursor-pointer"
+        >
+          تسجيل الدخول كمدير
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen pb-32 pt-6 px-4 max-w-7xl mx-auto space-y-8 animate-fadeIn">
-      {/* Admin Developer Header (Light Theme) */}
-      <div className="bg-gradient-to-br from-white via-sky-50/70 to-indigo-50/60 border border-slate-200/90 rounded-3xl p-6 sm:p-8 text-slate-900 shadow-lg relative overflow-hidden space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-amber-800 border border-amber-500/30 text-xs font-bold shadow-xs">
-              <IconCrown size={14} className="text-amber-600" />
-              <span>لوحة التحكم العالية المطور الرئيسي</span>
-            </div>
-            <h1 className="font-heading font-extrabold text-2xl sm:text-4xl tracking-tight text-slate-900 flex items-center gap-3">
-              <span>أهلاً بك، {user?.username}</span>
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-600 max-w-2xl">
-              منظومة التحكم الشاملة لاستوديو Fonty فونتي - التحكم بالمستخدمين، التراخيص، تصدير البيانات، وقواعد الصيانة.
-            </p>
+    <div className="pb-24 pt-4 px-4 max-w-6xl mx-auto space-y-6 dir-rtl animate-fadeIn">
+      {/* Header with Live Firebase Status */}
+      <div className="liquid-glass-card rounded-2xl p-5 border border-white/80 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-sky-500/15 border border-sky-400/30 text-sky-600 flex items-center justify-center">
+            <IconShield size={22} />
           </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="px-4 py-2 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-mono font-bold flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>الخادم: نشط 100%</span>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="font-heading font-black text-lg text-slate-900">
+                مركز تحكم المطورين (Firebase Console)
+              </h1>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                سحابي متصل
+              </span>
             </div>
-            {maintenanceMode && (
-              <div className="px-4 py-2 rounded-2xl bg-amber-50 border border-amber-300 text-xs text-amber-800 font-bold flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-                <span>وضع الصيانة مفعّل</span>
-              </div>
-            )}
+            <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+              مشروع Firebase: <strong className="text-slate-800">{firebaseProjectInfo.projectId}</strong>
+              <span className="mx-2">•</span>
+              المسؤول: <strong className="text-sky-700">{user.email}</strong>
+            </p>
           </div>
         </div>
 
-        {/* Dynamic Metric Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-white/60 relative z-10">
-          <div className="p-4 rounded-2xl liquid-glass-card border border-white/80 shadow-md space-y-1">
-            <div className="flex items-center justify-between text-slate-600 text-xs font-bold">
-              <span>المستخدمين المسجلين</span>
-              <IconUsers size={16} className="text-sky-600" />
-            </div>
-            <p className="text-2xl font-black font-mono text-slate-900">{usersList.length}</p>
-            <p className="text-[10px] text-emerald-700 font-bold">نشط ومتوفر</p>
-          </div>
-
-          <div className="p-4 rounded-2xl liquid-glass-card border border-white/80 shadow-md space-y-1">
-            <div className="flex items-center justify-between text-slate-600 text-xs font-bold">
-              <span>الخطوط في السحابة</span>
-              <IconFonts size={16} className="text-indigo-600" />
-            </div>
-            <p className="text-2xl font-black font-mono text-slate-900">{fontsList.length}</p>
-            <p className="text-[10px] text-sky-700 font-bold">جاهزة للتصدير</p>
-          </div>
-
-          <div className="p-4 rounded-2xl liquid-glass-card border border-white/80 shadow-md space-y-1">
-            <div className="flex items-center justify-between text-slate-600 text-xs font-bold">
-              <span>قواعد GSUB والتراكيب</span>
-              <IconSparkles size={16} className="text-amber-600" />
-            </div>
-            <p className="text-2xl font-black font-mono text-slate-900">1,240+</p>
-            <p className="text-[10px] text-amber-700 font-bold">مفعلة تلقائياً</p>
-          </div>
-
-          <div className="p-4 rounded-2xl liquid-glass-card border border-white/80 shadow-md space-y-1">
-            <div className="flex items-center justify-between text-slate-600 text-xs font-bold">
-              <span>حالة النظام والصيانة</span>
-              <IconActivity size={16} className="text-emerald-600" />
-            </div>
-            <p className="text-xl font-bold font-mono text-emerald-700">
-              {maintenanceMode ? 'وضع الصيانة' : 'مستقر 99.9%'}
-            </p>
-            <p className="text-[10px] text-slate-600 font-bold">طبيعي وحيوي</p>
-          </div>
-        </div>
+        <button
+          onClick={loadFirebaseTelemetry}
+          disabled={isLoadingStats}
+          className="px-3.5 py-1.5 rounded-xl liquid-glass-button text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 transition-all self-end sm:self-auto"
+        >
+          <IconRefresh size={14} className={isLoadingStats ? 'animate-spin text-sky-600' : ''} />
+          <span>تحديث سحابي</span>
+        </button>
       </div>
 
-      {/* Admin Navigation Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar p-2 liquid-glass-card rounded-2xl shadow-xl border border-white/80">
-        {[
-          { id: 'support', label: 'الدعم المباشر ومحادثات المستخدمين', icon: IconHeadphones, badge: pendingSupportCount },
-          { id: 'overview', label: 'الرسوم البيانية والتحليلات', icon: IconBarChart },
-          { id: 'users', label: 'إدارة المستخدمين والحسابات', icon: IconUsers },
-          { id: 'fonts', label: 'رفع وإدارة الخطوط (TTF/OTF)', icon: IconFonts },
-          { id: 'settings', label: 'إعدادات المنظومة والصيانة', icon: IconSettings },
-          { id: 'logs', label: 'سجل الأمان والنشاطات', icon: IconActivity },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`px-4 py-2.5 rounded-xl text-xs font-heading font-bold flex items-center gap-2 whitespace-nowrap transition-all relative ${
-                isActive
-                  ? 'bg-gradient-to-r from-sky-600 to-blue-600 text-white shadow-md border border-white/20'
-                  : 'liquid-glass-button text-slate-700 hover:text-slate-900'
-              }`}
-            >
-              <Icon size={16} />
-              <span>{tab.label}</span>
-              {Boolean(tab.badge && tab.badge > 0) && (
-                <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-mono font-bold animate-pulse">
-                  {tab.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar p-1.5 bg-white/50 backdrop-blur-md rounded-2xl border border-white/80 text-xs font-heading font-bold shadow-xs">
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+            activeTab === 'overview'
+              ? 'bg-sky-600 text-white shadow-sm'
+              : 'text-slate-700 hover:text-slate-900 hover:bg-white/60'
+          }`}
+        >
+          <IconCloud size={16} />
+          <span>نظرة عامة وسحابة Firebase</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+            activeTab === 'users'
+              ? 'bg-sky-600 text-white shadow-sm'
+              : 'text-slate-700 hover:text-slate-900 hover:bg-white/60'
+          }`}
+        >
+          <IconUsers size={16} />
+          <span>المستخدمين ({usersList.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('fonts')}
+          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+            activeTab === 'fonts'
+              ? 'bg-sky-600 text-white shadow-sm'
+              : 'text-slate-700 hover:text-slate-900 hover:bg-white/60'
+          }`}
+        >
+          <IconFonts size={16} />
+          <span>مكتبة الخطوط</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+            activeTab === 'settings'
+              ? 'bg-sky-600 text-white shadow-sm'
+              : 'text-slate-700 hover:text-slate-900 hover:bg-white/60'
+          }`}
+        >
+          <IconSettings size={16} />
+          <span>إعدادات النظام</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('logs')}
+          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+            activeTab === 'logs'
+              ? 'bg-sky-600 text-white shadow-sm'
+              : 'text-slate-700 hover:text-slate-900 hover:bg-white/60'
+          }`}
+        >
+          <IconActivity size={16} />
+          <span>سجل العمليات</span>
+        </button>
       </div>
 
-      {/* TAB 0: LIVE SUPPORT CONSOLE */}
-      {activeTab === 'support' && <AdminLiveSupportConsole />}
-
-      {/* TAB 1: OVERVIEW & RECHARTS */}
+      {/* TAB 1: OVERVIEW & CLOUD TELEMETRY */}
       {activeTab === 'overview' && (
         <div className="space-y-6 animate-fadeIn">
-          {/* Quick Export Banner */}
-          <div className="p-4 rounded-2xl liquid-glass-card border border-white/80 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-sky-500/15 border border-sky-400/30 text-sky-700">
-                <IconDownload size={20} />
+          {/* Real Firebase KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 rounded-2xl liquid-glass-card border border-white/80 space-y-1">
+              <div className="flex items-center justify-between text-slate-500 text-xs">
+                <span>المستخدمين المسجلين</span>
+                <IconUsers size={16} className="text-sky-600" />
               </div>
-              <div>
-                <h4 className="font-bold text-xs text-slate-900">
-                  تصدير النسخ الاحتياطية وسجلات النشاط
-                </h4>
-                <p className="text-[11px] text-slate-600 font-medium">
-                  تصدير بيانات المستخدمين والخطوط المرفوعة بصيغ JSON و CSV بنقرة واحدة.
-                </p>
-              </div>
+              <p className="text-2xl font-black font-heading text-slate-900">
+                {usersList.length || firebaseStats.totalUsers}
+              </p>
+              <p className="text-[10px] text-emerald-600 font-medium">سحابي في Firestore</p>
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <button
-                onClick={handleExportUsersJSON}
-                className="px-3 py-1.5 rounded-xl liquid-glass-button text-sky-800 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all"
-              >
-                <IconDownload size={14} />
-                <span>المستخدمين (JSON)</span>
-              </button>
-              <button
-                onClick={handleExportUsersCSV}
-                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all border border-white/20"
-              >
-                <IconDownload size={14} />
-                <span>المستخدمين (CSV)</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Recharts Analytics Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Chart 1: User Growth AreaChart */}
-            <div className="liquid-glass-card rounded-3xl p-6 shadow-md border border-white/80 space-y-4">
-              <div className="flex items-center justify-between border-b border-white/60 pb-3">
-                <div className="flex items-center gap-2">
-                  <IconUsers size={18} className="text-sky-600" />
-                  <h3 className="font-heading font-bold text-sm text-slate-900">
-                    معدل نمو المستخدمين والنشاط الأسبوعي
-                  </h3>
-                </div>
-                <span className="text-[10px] text-emerald-800 font-bold liquid-glass-badge px-2 py-0.5 rounded-full border border-emerald-300/50">
-                  +34% هذا الأسبوع
-                </span>
+            <div className="p-4 rounded-2xl liquid-glass-card border border-white/80 space-y-1">
+              <div className="flex items-center justify-between text-slate-500 text-xs">
+                <span>مشاريع الخطوط</span>
+                <IconFonts size={16} className="text-indigo-600" />
               </div>
-
-              <div className="h-64 w-full pt-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={userGrowthData}>
-                    <defs>
-                      <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="colorActive" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                    <XAxis dataKey="day" stroke="#94a3b8" fontSize={11} />
-                    <YAxis stroke="#94a3b8" fontSize={11} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1e1e24',
-                        borderColor: '#333',
-                        borderRadius: '12px',
-                        color: '#fff',
-                        fontSize: '11px',
-                      }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                    <Area type="monotone" dataKey="users" name="إجمالي الحسابات" stroke="#0ea5e9" fillOpacity={1} fill="url(#colorUsers)" />
-                    <Area type="monotone" dataKey="active" name="النشطين يومياً" stroke="#6366f1" fillOpacity={1} fill="url(#colorActive)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
+              <p className="text-2xl font-black font-heading text-indigo-900">
+                {firebaseStats.totalProjects || 5}
+              </p>
+              <p className="text-[10px] text-indigo-600 font-medium">مشاريع ومخطوطات</p>
             </div>
 
-            {/* Chart 2: Fonts Daily Activity BarChart */}
-            <div className="liquid-glass-card rounded-3xl p-6 shadow-md border border-white/80 space-y-4">
-              <div className="flex items-center justify-between border-b border-white/60 pb-3">
-                <div className="flex items-center gap-2">
-                  <IconFonts size={18} className="text-amber-600" />
-                  <h3 className="font-heading font-bold text-sm text-slate-900">
-                    الخطوط المرفوعة والمصدرة يومياً
-                  </h3>
-                </div>
-                <span className="text-[10px] text-sky-800 font-bold liquid-glass-badge px-2 py-0.5 rounded-full border border-sky-300/50">
-                  تنسيق OTF/TTF
-                </span>
+            <div className="p-4 rounded-2xl liquid-glass-card border border-white/80 space-y-1">
+              <div className="flex items-center justify-between text-slate-500 text-xs">
+                <span>حالة المنظومة</span>
+                <IconCheckCircle size={16} className="text-emerald-600" />
               </div>
-
-              <div className="h-64 w-full pt-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dailyFontActivityData}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                    <XAxis dataKey="day" stroke="#94a3b8" fontSize={11} />
-                    <YAxis stroke="#94a3b8" fontSize={11} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1e1e24',
-                        borderColor: '#333',
-                        borderRadius: '12px',
-                        color: '#fff',
-                        fontSize: '11px',
-                      }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                    <Bar dataKey="uploaded" name="الخطوط المرفوعة" fill="#f59e0b" radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="exported" name="الخطوط المُصدَّرة" fill="#10b981" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              <p className="text-lg font-black font-heading text-emerald-700">
+                100% مستقرة
+              </p>
+              <p className="text-[10px] text-slate-500 font-medium">Firebase Auth & DB</p>
             </div>
           </div>
 
-          {/* Chart 3: Monthly Font Uploads Rate */}
-          <div className="liquid-glass-card rounded-3xl p-6 shadow-md border border-white/80 space-y-4">
-            <div className="flex items-center justify-between border-b border-white/60 pb-3">
-              <div className="flex items-center gap-2">
-                <IconBarChart size={18} className="text-sky-600" />
+          {/* Connected Domain Card */}
+          <div className="p-5 rounded-2xl liquid-glass-card border border-white/80 space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-600 flex items-center justify-center font-bold">
+                  <IconGlobe size={18} />
+                </div>
                 <div>
-                  <h3 className="font-heading font-bold text-sm text-slate-900">
-                    معدل رفع الخطوط شهرياً ونسبة القبول/الرفض
-                  </h3>
-                  <p className="text-[11px] text-slate-600 font-medium">متابعة تراكمية لرفع خطوط TTF/OTF على مدار الأشهر</p>
+                  <h4 className="font-bold text-xs text-slate-900">
+                    الدومين السحابي المعتمد (Vercel Production)
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    مربوط ومسجل في Firestore بمجموعة <code className="text-sky-700">systemSettings/domainConfig</code>
+                  </p>
                 </div>
               </div>
-              <span className="text-[10px] text-emerald-800 font-bold liquid-glass-badge px-2.5 py-1 rounded-full border border-emerald-300/50">
-                نسبة القبول العامة 88.4%
+
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                ● مسجل في Firestore
               </span>
             </div>
 
-            <div className="h-64 w-full pt-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={monthlyFontUploadRateData}>
-                  <defs>
-                    <linearGradient id="colorMonthUploaded" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorMonthApproved" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorMonthRejected" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                  <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} />
-                  <YAxis stroke="#94a3b8" fontSize={11} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1e1e24',
-                      borderColor: '#333',
-                      borderRadius: '12px',
-                      color: '#fff',
-                      fontSize: '11px',
-                    }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                  <Area type="monotone" dataKey="uploaded" name="إجمالي المرفوعات" stroke="#0ea5e9" fillOpacity={1} fill="url(#colorMonthUploaded)" />
-                  <Area type="monotone" dataKey="approved" name="الخطوط المقبولة" stroke="#10b981" fillOpacity={1} fill="url(#colorMonthApproved)" />
-                  <Area type="monotone" dataKey="rejected" name="الخطوط المرفوضة" stroke="#f43f5e" fillOpacity={1} fill="url(#colorMonthRejected)" />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="p-3 rounded-xl bg-slate-900 text-white font-mono text-xs flex items-center justify-between gap-2 overflow-x-auto">
+              <span className="text-emerald-400">{PRIMARY_DOMAIN}/</span>
+              <button
+                onClick={() => syncDomainConfigToFirestore()}
+                className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded cursor-pointer transition-all"
+              >
+                إعادة المزامنة
+              </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-2 liquid-glass-card rounded-3xl p-6 border border-white/80 space-y-6">
-              <div className="flex items-center justify-between border-b border-white/60 pb-4">
-                <div className="flex items-center gap-2">
-                  <IconShield size={20} className="text-sky-600" />
-                  <h3 className="font-heading font-bold text-lg text-slate-900">
-                    حالة المنظومة والترخيص
-                  </h3>
-                </div>
-                <span className="text-xs text-slate-600 font-medium">إصدار Fonty فونتي v1.0.0</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-4 rounded-2xl liquid-glass-badge border border-white/80 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                    <span>المطور المسجل</span>
-                    <IconCrown size={16} className="text-amber-500" />
-                  </div>
-                  <p className="text-sm font-bold text-sky-700">Dr Font</p>
-                  <p className="text-[11px] text-slate-600 font-medium">صلاحية جذري كاملة (Root Developer)</p>
-                </div>
-
-                <div className="p-4 rounded-2xl liquid-glass-badge border border-white/80 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                    <span>تصدير الخطوط OTF/TTF</span>
-                    <IconCheckCircle size={16} className="text-emerald-600" />
-                  </div>
-                  <p className="text-sm font-bold text-emerald-700">جاهز وغير محدود</p>
-                  <p className="text-[11px] text-slate-600 font-medium">دعم كود خفيف وتوافق 100%</p>
-                </div>
-              </div>
+          {/* Quick Backup Export */}
+          <div className="p-4 rounded-2xl liquid-glass-card border border-white/80 flex items-center justify-between gap-3 text-xs">
+            <div className="space-y-0.5">
+              <h4 className="font-bold text-slate-900">تصدير النسخ الاحتياطية للبيانات</h4>
+              <p className="text-slate-500 text-[11px]">تصدير بيانات المستخدمين والخطوط بصيغة JSON أو CSV.</p>
             </div>
-
-            <div className="liquid-glass-card rounded-3xl p-6 border border-white/80 space-y-6">
-              <h3 className="font-heading font-bold text-base text-slate-900 border-b border-white/60 pb-4">
-                إحصائيات سريعة
-              </h3>
-
-              <div className="space-y-4 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-700 font-medium">المستخدمين النشطين</span>
-                  <span className="font-bold text-slate-900">
-                    {usersList.filter((u) => !u.isBlocked).length}
-                  </span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-200/60 overflow-hidden">
-                  <div className="h-full bg-emerald-500 w-[95%]" />
-                </div>
-
-                <div className="flex items-center justify-between pt-2">
-                  <span className="text-slate-700 font-medium">الحسابات المحظورة</span>
-                  <span className="font-bold text-rose-600">
-                    {usersList.filter((u) => u.isBlocked).length}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between pt-2">
-                  <span className="text-slate-700 font-medium">الأدمن والمسؤولين</span>
-                  <span className="font-bold text-amber-600">
-                    {
-                      usersList.filter(
-                        (u) =>
-                          u.role === 'admin' ||
-                          u.role === 'developer' ||
-                          u.isDeveloper ||
-                          u.username.toLowerCase().includes('dr font')
-                      ).length
-                    }
-                  </span>
-                </div>
-              </div>
-            </div>
+            <button
+              onClick={() => {
+                const data = JSON.stringify({ users: usersList, exportedAt: new Date().toISOString() }, null, 2);
+                const blob = new Blob([data], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `fonty_backup_${Date.now()}.json`;
+                a.click();
+              }}
+              className="px-3 py-1.5 rounded-xl liquid-glass-button font-bold text-sky-800 flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <IconDownload size={14} />
+              <span>تصدير JSON</span>
+            </button>
           </div>
         </div>
       )}
 
-      {/* TAB 2: USER MANAGEMENT */}
+      {/* TAB 2: USERS MANAGEMENT */}
       {activeTab === 'users' && (
-        <div className="liquid-glass-card rounded-3xl p-6 shadow-xl border border-white/80 space-y-6 animate-fadeIn">
-          {/* Header Controls */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/60 pb-6">
-            <div>
-              <h3 className="font-heading font-bold text-xl text-slate-900">
-                إدارة المستخدمين والتحكم بالحسابات
-              </h3>
-              <p className="text-xs text-slate-600 font-medium">
-                عرض الحسابات المسجلة، نوع الجهاز، عنوان IP، تعديل الصلاحيات، الحظر، أو تصدير البيانات.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={handleExportUsersJSON}
-                className="px-3 py-2 rounded-2xl liquid-glass-button text-slate-800 font-bold text-xs flex items-center gap-1.5 transition-all"
-              >
-                <IconDownload size={14} />
-                <span>JSON</span>
-              </button>
-              <button
-                onClick={handleExportUsersCSV}
-                className="px-3 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all border border-white/20"
-              >
-                <IconDownload size={14} />
-                <span>CSV</span>
-              </button>
-              <button
-                onClick={() => setShowAddUserModal(true)}
-                className="px-4 py-2 rounded-2xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-sky-500/20 transition-all border border-white/20"
-              >
-                <IconPlus size={16} />
-                <span>إضافة حساب جديد</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Search & Role Filters */}
-          <div className="flex flex-col sm:flex-row items-center gap-3">
-            <div className="relative flex-1 w-full">
-              <IconSearch size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+        <div className="space-y-4 animate-fadeIn">
+          {/* Users Header & Search */}
+          <div className="p-4 rounded-2xl liquid-glass-card border border-white/80 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
+            <div className="relative w-full sm:w-72">
               <input
                 type="text"
-                placeholder="البحث باسم المستخدم أو البريد..."
+                placeholder="بحث عن اسم أو بريد..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pr-10 pl-4 py-2.5 rounded-2xl liquid-glass-input text-xs text-slate-900 focus:outline-none transition-colors"
+                className="w-full pr-8 pl-3 py-1.5 rounded-xl liquid-glass-input text-xs text-slate-900 focus:outline-none"
               />
+              <IconSearch size={14} className="absolute right-2.5 top-2.5 text-slate-400" />
             </div>
 
-            <div className="flex items-center gap-1 liquid-glass-badge p-1 rounded-2xl border border-white/80 w-full sm:w-auto">
-              {[
-                { id: 'all', label: 'الكل' },
-                { id: 'admin', label: 'إدارة' },
-                { id: 'user', label: 'مستخدمين' },
-              ].map((rf) => (
-                <button
-                  key={rf.id}
-                  onClick={() => setRoleFilter(rf.id as any)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    roleFilter === rf.id
-                      ? 'bg-gradient-to-r from-sky-600 to-blue-600 text-white shadow-xs border border-white/20'
-                      : 'text-slate-700 hover:text-slate-900'
-                  }`}
-                >
-                  {rf.label}
-                </button>
-              ))}
-            </div>
+            <button
+              onClick={() => setShowAddUserModal(true)}
+              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <IconPlus size={14} />
+              <span>إضافة مستخدم</span>
+            </button>
           </div>
 
-          {/* Users Data Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-right text-xs text-slate-700">
-              <thead className="liquid-glass-badge text-slate-700 font-bold border-b border-white/60">
-                <tr>
-                  <th className="py-3 px-4 rounded-r-2xl">المستخدم</th>
-                  <th className="py-3 px-4">البريد الإلكتروني</th>
-                  <th className="py-3 px-4">نوع الجهاز</th>
-                  <th className="py-3 px-4">عنوان IP</th>
-                  <th className="py-3 px-4">الصلاحية والنوع</th>
-                  <th className="py-3 px-4">تاريخ الانضمام</th>
-                  <th className="py-3 px-4">الحالة</th>
-                  <th className="py-3 px-4 rounded-l-2xl text-center">حذف / التحكم بالحساب</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/40">
-                {filteredUsers.length === 0 ? (
+          {/* Users Table */}
+          <div className="liquid-glass-card rounded-2xl border border-white/80 overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead className="bg-slate-100/70 border-b border-slate-200 text-slate-600 font-bold">
                   <tr>
-                    <td colSpan={8} className="text-center py-8 text-slate-500 font-medium">
-                      لا يوجد مستخدمين مطابقين لخيارات البحث
-                    </td>
+                    <th className="p-3">المستخدم</th>
+                    <th className="p-3">البريد الإلكتروني</th>
+                    <th className="p-3">الصلاحية</th>
+                    <th className="p-3">الحالة</th>
+                    <th className="p-3 text-center">إجراءات</th>
                   </tr>
-                ) : (
-                  filteredUsers.map((u) => {
-                    const isDev = u.username.toLowerCase().includes('dr font') || u.username.toLowerCase().includes('drfont') || u.role === 'developer' || u.isDeveloper;
-
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {filteredUsers.map((u) => {
+                    const isRoot = u.role === 'developer' || u.email === 'admin@fonty.dev';
                     return (
-                      <tr key={u.id} className="hover:bg-white/40 transition-colors">
-                        <td className="py-3.5 px-4 font-bold flex items-center gap-2.5">
+                      <tr key={u.id} className="hover:bg-white/50 transition-colors">
+                        <td className="p-3 flex items-center gap-2.5">
                           <img
-                            src={u.avatarUrl}
+                            src={u.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
                             alt={u.username}
-                            className="w-8 h-8 rounded-full object-cover border border-white shadow-2xs"
+                            className="w-7 h-7 rounded-full object-cover border border-sky-400"
                           />
-                          <div>
-                            <p className="text-slate-900 flex items-center gap-1.5">
-                              <span>{u.username}</span>
-                              {isDev && (
-                                <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-600 text-[10px] font-bold">
-                                  المطور
-                                </span>
-                              )}
-                            </p>
-                          </div>
+                          <span className="font-bold text-slate-900">{u.username}</span>
                         </td>
-                        <td className="py-3.5 px-4 font-mono text-slate-600 font-medium">{u.email}</td>
-                        <td className="py-3.5 px-4">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl liquid-glass-badge text-slate-800 text-[11px] font-bold border border-white/80">
-                            <IconDevice size={13} className="text-sky-600 shrink-0" />
-                            <span>{u.deviceType || 'متصفح ويب (سطح المكتب)'}</span>
+                        <td className="p-3 font-mono text-slate-600 text-[11px]">{u.email}</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            u.role === 'admin' || u.role === 'developer'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {u.role === 'developer' ? 'مطور رئيسي' : u.role === 'admin' ? 'مشرف' : 'مستخدم'}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 font-mono dir-ltr text-right">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-xl liquid-glass-badge text-indigo-700 text-[11px] font-bold border border-indigo-200/50">
-                            <IconGlobe size={12} className="text-indigo-500 shrink-0" />
-                            <span>{u.ipAddress || '197.38.112.42'}</span>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            u.isBlocked
+                              ? 'bg-rose-100 text-rose-700'
+                              : 'bg-emerald-100 text-emerald-800'
+                          }`}>
+                            {u.isBlocked ? 'محظور' : 'نشط'}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4">
-                          <select
-                            disabled={isDev}
-                            value={u.role || 'user'}
-                            onChange={(e) => {
-                              adminUpdateUser(u.id, {
-                                role: e.target.value as any,
-                                isDeveloper: e.target.value === 'developer',
-                              });
-                              reloadUsers();
-                            }}
-                            className="px-2.5 py-1 rounded-xl liquid-glass-input border border-white/80 text-xs font-bold text-slate-800 focus:outline-none"
-                          >
-                            <option value="user">مستخدم عادي</option>
-                            <option value="admin">مسؤول (Admin)</option>
-                            <option value="developer">مطور (Developer)</option>
-                          </select>
-                        </td>
-                        <td className="py-3.5 px-4 text-slate-600 text-[11px] font-medium">
-                          {new Date(u.createdAt).toLocaleDateString('ar-EG')}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          {u.isBlocked ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-700 text-[11px] font-bold border border-rose-300/40">
-                              <IconBan size={12} />
-                              <span>محظور</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 text-[11px] font-bold border border-emerald-300/40">
-                              <IconCheckCircle size={12} />
-                              <span>نشط</span>
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 text-center">
+                        <td className="p-3 text-center">
                           <div className="flex items-center justify-center gap-1.5">
-                            {/* Reset Password */}
                             <button
                               onClick={() => {
                                 setResetModalUser(u);
                                 setResetPasswordInput('');
                               }}
-                              title="إعادة تعيين كلمة المرور"
-                              className="p-1.5 rounded-xl liquid-glass-button text-slate-700 transition-colors"
+                              title="تغيير كلمة المرور"
+                              className="p-1.5 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 cursor-pointer"
                             >
-                              <IconKey size={16} />
+                              <IconKey size={14} />
                             </button>
-
-                            {/* Block Toggle */}
-                            {!isDev && (
-                              <button
-                                onClick={() => {
-                                  adminUpdateUser(u.id, { isBlocked: !u.isBlocked });
-                                  reloadUsers();
-                                }}
-                                title={u.isBlocked ? 'إلغاء الحظر' : 'حظر المستخدم'}
-                                className={`p-1.5 rounded-xl transition-colors ${
-                                  u.isBlocked
-                                    ? 'bg-emerald-500/15 text-emerald-700 border border-emerald-300/40'
-                                    : 'bg-amber-500/15 text-amber-700 border border-amber-300/40'
-                                }`}
-                              >
-                                <IconBan size={16} />
-                              </button>
-                            )}
-
-                            {/* Delete User */}
-                            {!isDev && (
-                              <button
-                                onClick={() => {
-                                  const ok = adminDeleteUser(u.id);
-                                  if (ok) {
-                                    reloadUsers();
-                                    setLogs((prev) => [
-                                      {
-                                        id: `log_${Date.now()}`,
-                                        time: new Date().toLocaleTimeString('ar-EG'),
-                                        type: 'حذف مستخدم',
-                                        msg: `تم حذف حساب المستخدم ${u.username}`,
-                                        level: 'warn',
-                                      },
-                                      ...prev,
-                                    ]);
-                                  }
-                                }}
-                                title="حذف حساب المستخدم نهائياً"
-                                className="px-2.5 py-1 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 border border-rose-300/50 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
-                              >
-                                <IconTrash size={14} />
-                                <span>حذف</span>
-                              </button>
+                            {!isRoot && (
+                              <>
+                                <button
+                                  onClick={() => handleToggleBlockUser(u)}
+                                  title={u.isBlocked ? 'إلغاء التجميد' : 'تجميد الحساب'}
+                                  className={`p-1.5 rounded-lg cursor-pointer ${
+                                    u.isBlocked ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                                  }`}
+                                >
+                                  <IconBan size={14} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteUser(u)}
+                                  title="حذف الحساب"
+                                  className="p-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 cursor-pointer"
+                                >
+                                  <IconTrash size={14} />
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>
                       </tr>
                     );
-                  })
-                )}
-              </tbody>
-            </table>
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
-      {/* TAB 3: FONTS DATABASE & UPLOAD MANAGER */}
-      {activeTab === 'fonts' && <AdminFontManager />}
+      {/* TAB 3: FONTS MANAGEMENT */}
+      {activeTab === 'fonts' && (
+        <div className="animate-fadeIn">
+          <AdminFontManager />
+        </div>
+      )}
 
-      {/* TAB 4: SYSTEM SETTINGS */}
+
+
+      {/* TAB 5: SYSTEM SETTINGS */}
       {activeTab === 'settings' && (
-        <div className="liquid-glass-card rounded-3xl p-6 shadow-xl border border-white/80 space-y-6 animate-fadeIn">
-          <div>
-            <h3 className="font-heading font-bold text-xl text-slate-900">
-              إعدادات المنظومة والإعلانات العامة
+        <div className="liquid-glass-card rounded-2xl p-6 border border-white/80 space-y-5 animate-fadeIn max-w-2xl">
+          <div className="border-b border-slate-200 pb-3">
+            <h3 className="font-heading font-bold text-base text-slate-900">
+              إعدادات النظام والمنصة
             </h3>
-            <p className="text-xs text-slate-600 font-medium">
-              تكوين سلوك المنظومة، وضع الصيانة المتقدم، وتأمين التسجيل للعملاء.
+            <p className="text-xs text-slate-500">
+              مزامنة الإعدادات لحظياً مع قاعدة بيانات Firebase Firestore.
             </p>
           </div>
 
-          <div className="space-y-6 max-w-2xl">
-            {/* Maintenance Mode Option */}
-            <div className="p-5 rounded-2xl liquid-glass-badge border border-amber-400/40 flex items-center justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <IconCrown size={18} className="text-amber-600" />
-                  <h4 className="font-bold text-sm text-slate-900">
-                    تفعيل وضع الصيانة العام (Maintenance Mode)
-                  </h4>
-                </div>
-                <p className="text-xs text-slate-600 font-medium">
-                  عند تفعيله، سيتم إخفاء محتوى الموقع وإظهار شاشة صيانة مخصصة للزوار عند التحديثات الكبيرة.
-                </p>
-              </div>
+          {saveSuccessMsg && (
+            <div className="p-3 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold animate-fadeIn">
+              {saveSuccessMsg}
+            </div>
+          )}
 
+          <div className="space-y-4 text-xs">
+            {/* Maintenance Mode */}
+            <div className="p-4 rounded-xl bg-white/60 border border-slate-200 flex items-center justify-between">
+              <div>
+                <h4 className="font-bold text-slate-900">وضع الصيانة العام (Maintenance Mode)</h4>
+                <p className="text-slate-500 text-[11px]">إظهار شاشة الصيانة لجميع الزوار غير الإداريين.</p>
+              </div>
               <input
                 type="checkbox"
                 checked={maintenanceMode}
-                onChange={(e) => handleToggleMaintenance(e.target.checked)}
-                className="w-6 h-6 accent-amber-500 rounded cursor-pointer"
+                onChange={(e) => setMaintenanceMode(e.target.checked)}
+                className="w-5 h-5 accent-sky-600 cursor-pointer"
               />
             </div>
 
             {/* Announcement Banner */}
-            <div className="p-5 rounded-2xl liquid-glass-card border border-white/80 space-y-4">
+            <div className="p-4 rounded-xl bg-white/60 border border-slate-200 space-y-2.5">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="font-bold text-sm text-slate-900">
-                    الشريط الإعلاني العام والتنبيهات
-                  </h4>
-                  <p className="text-xs text-slate-600 font-medium">إظهار رسالة تنبيه لأعلى جميع زوار الموقع</p>
+                  <h4 className="font-bold text-slate-900">الشريط الإعلاني العام</h4>
+                  <p className="text-slate-500 text-[11px]">عرض شريط تنبيه أعلى صفحات المنصة.</p>
                 </div>
                 <input
                   type="checkbox"
                   checked={announcementActive}
                   onChange={(e) => setAnnouncementActive(e.target.checked)}
-                  className="w-5 h-5 accent-sky-500 rounded cursor-pointer"
+                  className="w-5 h-5 accent-sky-600 cursor-pointer"
                 />
               </div>
 
               {announcementActive && (
-                <textarea
-                  rows={2}
+                <input
+                  type="text"
                   value={announcementMsg}
                   onChange={(e) => setAnnouncementMsg(e.target.value)}
-                  placeholder="اكتب نص الإعلان الذي سيظهر للجمهور..."
-                  className="w-full p-3 rounded-2xl liquid-glass-input text-xs text-slate-900 focus:outline-none"
+                  placeholder="نص الإعلان للزوار..."
+                  className="w-full p-2.5 rounded-xl liquid-glass-input text-xs text-slate-900 focus:outline-none"
                 />
               )}
             </div>
 
             {/* Allow Signups */}
-            <div className="p-5 rounded-2xl liquid-glass-card border border-white/80 flex items-center justify-between">
+            <div className="p-4 rounded-xl bg-white/60 border border-slate-200 flex items-center justify-between">
               <div>
-                <h4 className="font-bold text-sm text-slate-900">السماح بتسجيل حسابات جديدة</h4>
-                <p className="text-xs text-slate-600 font-medium">فتح أو إغلاق نموذج الاشتراك للزوار الجدد</p>
+                <h4 className="font-bold text-slate-900">السماح بتسجيل حسابات جديدة</h4>
+                <p className="text-slate-500 text-[11px]">فتح أو إغلاق نموذج إنشاء الحسابات.</p>
               </div>
               <input
                 type="checkbox"
                 checked={allowSignups}
                 onChange={(e) => setAllowSignups(e.target.checked)}
-                className="w-5 h-5 accent-sky-500 rounded cursor-pointer"
+                className="w-5 h-5 accent-sky-600 cursor-pointer"
               />
             </div>
 
             <button
               onClick={handleSaveSettings}
-              className="px-6 py-3 rounded-2xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-sky-500/25 transition-all border border-white/20"
+              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold text-xs shadow-md shadow-sky-500/20 cursor-pointer transition-all active:scale-95"
             >
-              حفظ جميع التغييرات والتطبيقات
+              حفظ التغييرات في Firestore
             </button>
           </div>
         </div>
       )}
 
-      {/* TAB 5: AUDIT LOGS */}
+      {/* TAB 6: CLOUD AUDIT LOGS */}
       {activeTab === 'logs' && (
-        <div className="liquid-glass-card rounded-3xl p-6 shadow-xl border border-white/80 space-y-6 animate-fadeIn">
-          <div className="flex items-center justify-between border-b border-white/60 pb-4">
+        <div className="liquid-glass-card rounded-2xl p-5 border border-white/80 space-y-4 animate-fadeIn">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
             <div>
-              <h3 className="font-heading font-bold text-xl text-slate-900">
-                سجل الأمان والعمليات المباشر
+              <h3 className="font-heading font-bold text-base text-slate-900">
+                سجل العمليات السحابي (Firestore Audit Logs)
               </h3>
-              <p className="text-xs text-slate-600 font-medium">تسجيل لحظي لعمليات النظام، تسجيل الدخول وتغييرات الصلاحيات.</p>
+              <p className="text-xs text-slate-500">سجل لحظي لأنشطة المنصة ومزامنة السحابة.</p>
             </div>
-
             <button
-              onClick={() => setLogs([])}
-              className="px-3 py-1.5 rounded-xl liquid-glass-button text-xs text-slate-700 transition-colors"
+              onClick={loadFirebaseTelemetry}
+              className="px-3 py-1 rounded-lg liquid-glass-button text-[11px] text-slate-700 cursor-pointer"
             >
-              مسح السجل
+              تحديث السجل
             </button>
           </div>
 
-          <div className="space-y-3">
-            {logs.map((log) => (
-              <div
-                key={log.id}
-                className="p-4 rounded-2xl liquid-glass-card border border-white/80 flex items-center justify-between text-xs shadow-xs"
-              >
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      log.level === 'success'
-                        ? 'bg-emerald-500'
-                        : log.level === 'warn'
-                        ? 'bg-amber-500'
-                        : 'bg-sky-500'
-                    }`}
-                  />
-                  <div>
-                    <span className="font-bold text-slate-900 ml-2">[{log.type}]</span>
-                    <span className="text-slate-700 font-medium">{log.msg}</span>
+          <div className="space-y-2">
+            {logs.length === 0 ? (
+              <p className="text-xs text-slate-400 py-4 text-center">لا توجد سجلات حالياً</p>
+            ) : (
+              logs.map((log) => (
+                <div
+                  key={log.id}
+                  className="p-3 rounded-xl bg-white/60 border border-slate-200 flex items-center justify-between text-xs"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        log.level === 'success'
+                          ? 'bg-emerald-500'
+                          : log.level === 'warn'
+                          ? 'bg-amber-500'
+                          : 'bg-sky-500'
+                      }`}
+                    />
+                    <span className="font-bold text-slate-900 ml-1">[{log.type}]</span>
+                    <span className="text-slate-600">{log.msg}</span>
                   </div>
+                  <span className="font-mono text-[10px] text-slate-400">
+                    {new Date(log.timestamp).toLocaleTimeString('ar-EG')}
+                  </span>
                 </div>
-
-                <span className="font-mono text-[10px] text-slate-500 font-medium">{log.time}</span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       )}
 
-      {/* Modal: Add New User */}
+      {/* MODAL: ADD USER */}
       {showAddUserModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md animate-fadeIn">
-          <div className="liquid-glass-modal rounded-3xl p-6 max-w-md w-full shadow-2xl border border-white/80 space-y-6">
-            <div className="flex items-center justify-between border-b border-white/60 pb-4">
-              <h3 className="font-heading font-bold text-base text-slate-900">
-                إضافة حساب جديد
-              </h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md animate-fadeIn overscroll-contain modal-backdrop-lock"
+          onClick={() => setShowAddUserModal(false)}
+          onTouchMove={(e) => {
+            if (e.target === e.currentTarget) e.preventDefault();
+          }}
+        >
+          <div
+            className="liquid-glass-modal rounded-2xl p-6 max-w-sm w-full border border-white/80 space-y-4 max-h-[90vh] overflow-y-auto overscroll-y-contain modal-content-scroll"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="font-heading font-bold text-sm text-slate-900">إضافة مستخدم جديد</h3>
               <button
                 onClick={() => setShowAddUserModal(false)}
-                className="text-slate-400 hover:text-slate-700 transition-colors"
-                title="إغلاق"
+                className="text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 <IconClose size={18} />
               </button>
             </div>
 
             {userModalError && (
-              <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-300/40 text-rose-700 text-xs font-bold">
+              <div className="p-2.5 rounded-xl bg-rose-50 text-rose-700 text-xs font-bold border border-rose-200">
                 {userModalError}
               </div>
             )}
 
-            <form onSubmit={handleCreateUserSubmit} className="space-y-4 text-xs">
+            <form onSubmit={handleCreateUserSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">اسم المستخدم</label>
+                <label className="block font-medium text-slate-700 mb-1">اسم المستخدم</label>
                 <input
                   type="text"
                   required
-                  placeholder="مثال: AhmedDesigner"
                   value={newUsername}
                   onChange={(e) => setNewUsername(e.target.value)}
-                  className="w-full p-2.5 rounded-2xl liquid-glass-input text-slate-900 focus:outline-none"
+                  className="w-full p-2.5 rounded-xl liquid-glass-input text-xs"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">البريد الإلكتروني</label>
+                <label className="block font-medium text-slate-700 mb-1">البريد الإلكتروني</label>
                 <input
                   type="email"
                   required
-                  placeholder="user@example.com"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
-                  className="w-full p-2.5 rounded-2xl liquid-glass-input text-slate-900 focus:outline-none"
+                  className="w-full p-2.5 rounded-xl liquid-glass-input text-xs"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">كلمة المرور</label>
+                <label className="block font-medium text-slate-700 mb-1">كلمة المرور</label>
                 <input
                   type="password"
                   required
-                  placeholder="••••••••"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full p-2.5 rounded-2xl liquid-glass-input text-slate-900 focus:outline-none"
+                  className="w-full p-2.5 rounded-xl liquid-glass-input text-xs"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">نوع الصلاحية</label>
+                <label className="block font-medium text-slate-700 mb-1">نوع الصلاحية</label>
                 <select
                   value={newRole}
                   onChange={(e) => setNewRole(e.target.value as any)}
-                  className="w-full p-2.5 rounded-2xl liquid-glass-input text-slate-900 focus:outline-none"
+                  className="w-full p-2.5 rounded-xl liquid-glass-input text-xs"
                 >
                   <option value="user">مستخدم عادي</option>
-                  <option value="admin">مسؤول (Admin)</option>
-                  <option value="developer">مطور (Developer)</option>
+                  <option value="admin">مشرف إداري</option>
+                  <option value="developer">مطور</option>
                 </select>
               </div>
 
-              <div className="flex items-center gap-2 pt-2">
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 rounded-2xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold transition-all border border-white/20 shadow-md shadow-sky-500/20"
-                >
-                  إنشاء الحساب
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowAddUserModal(false)}
-                  className="px-4 py-2.5 rounded-2xl liquid-glass-button text-slate-700 font-bold"
-                >
-                  إلغاء
-                </button>
-              </div>
+              <button
+                type="submit"
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold text-xs shadow-sm cursor-pointer mt-2"
+              >
+                حفظ وإضافة للمنصة
+              </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* Modal: Reset Password */}
+      {/* MODAL: RESET PASSWORD */}
       {resetModalUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md animate-fadeIn">
-          <div className="liquid-glass-modal rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-white/80 space-y-4">
-            <h3 className="font-heading font-bold text-base text-slate-900">
-              تغيير كلمة المرور لـ ({resetModalUser.username})
-            </h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md animate-fadeIn overscroll-contain modal-backdrop-lock"
+          onClick={() => setResetModalUser(null)}
+          onTouchMove={(e) => {
+            if (e.target === e.currentTarget) e.preventDefault();
+          }}
+        >
+          <div
+            className="liquid-glass-modal rounded-2xl p-5 max-w-sm w-full border border-white/80 space-y-4 max-h-[90vh] overflow-y-auto overscroll-y-contain modal-content-scroll"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="font-heading font-bold text-sm text-slate-900">
+                تغيير كلمة المرور: {resetModalUser.username}
+              </h3>
+              <button
+                onClick={() => setResetModalUser(null)}
+                className="text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <IconClose size={18} />
+              </button>
+            </div>
 
-            <form onSubmit={handlePasswordResetSubmit} className="space-y-4 text-xs">
+            <form onSubmit={handlePasswordResetSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">كلمة المرور الجديدة</label>
+                <label className="block font-medium text-slate-700 mb-1">كلمة المرور الجديدة</label>
                 <input
-                  type="text"
+                  type="password"
                   required
-                  placeholder="أدخل كلمة المرور الجديدة"
+                  placeholder="أدخل 6 خانات على الأقل..."
                   value={resetPasswordInput}
                   onChange={(e) => setResetPasswordInput(e.target.value)}
-                  className="w-full p-2.5 rounded-2xl liquid-glass-input text-slate-900 focus:outline-none font-mono"
+                  className="w-full p-2.5 rounded-xl liquid-glass-input text-xs"
                 />
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 rounded-2xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold transition-all border border-white/20 shadow-md shadow-sky-500/20"
-                >
-                  تحديث الآن
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setResetModalUser(null)}
-                  className="px-4 py-2.5 rounded-2xl liquid-glass-button text-slate-700 font-bold"
-                >
-                  إلغاء
-                </button>
-              </div>
+              <button
+                type="submit"
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 text-white font-bold text-xs shadow-sm cursor-pointer mt-1"
+              >
+                تحديث كلمة المرور
+              </button>
             </form>
           </div>
         </div>

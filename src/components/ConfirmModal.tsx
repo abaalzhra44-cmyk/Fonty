@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { IconAlert, IconClose } from './icons/Icons';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -24,6 +25,9 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = React.memo(({
   onConfirm,
   onCancel,
 }) => {
+  // Lock background scrolling while confirm modal is displayed
+  useScrollLock(isOpen);
+
   const [inputText, setInputText] = useState('');
 
   useEffect(() => {
@@ -38,8 +42,17 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = React.memo(({
   const isMatch = !isVerificationRequired || inputText.trim() === requireVerificationText.trim();
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xl animate-fade-in">
-      <div className="apple-glass-modal w-full max-w-md p-6 shadow-2xl relative border border-white/80">
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xl animate-fade-in overscroll-contain modal-backdrop-lock"
+      onClick={onCancel}
+      onTouchMove={(e) => {
+        if (e.target === e.currentTarget) e.preventDefault();
+      }}
+    >
+      <div
+        className="apple-glass-modal w-full max-w-md p-6 shadow-2xl relative border border-white/80"
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
           type="button"
           onClick={onCancel}

@@ -39,6 +39,7 @@ import {
   IconActivity,
   IconCheck,
 } from './icons/Icons';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 export const AdminFontManager: React.FC = () => {
   const [fonts, setFonts] = useState<AdminFontRecord[]>([]);
@@ -64,6 +65,9 @@ export const AdminFontManager: React.FC = () => {
 
   // Edit Modal State
   const [editingFont, setEditingFont] = useState<AdminFontRecord | null>(null);
+
+  // Central background scroll lock while either admin font modal is open
+  useScrollLock(showUploadModal || !!editingFont);
 
   const loadFonts = () => {
     const list = getAdminFonts();
@@ -780,12 +784,19 @@ export const AdminFontManager: React.FC = () => {
       {/* UPLOAD FONT MODAL */}
       <AnimatePresence>
         {showUploadModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md animate-fade-in">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md animate-fade-in overscroll-contain modal-backdrop-lock"
+            onClick={() => setShowUploadModal(false)}
+            onTouchMove={(e) => {
+              if (e.target === e.currentTarget) e.preventDefault();
+            }}
+          >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="liquid-glass-card shadow-2xl w-full max-w-xl p-6 sm:p-8 space-y-6 border border-white/80 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+              className="liquid-glass-card shadow-2xl w-full max-w-xl p-6 sm:p-8 space-y-6 border border-white/80 max-h-[90vh] overflow-y-auto overscroll-y-contain modal-content-scroll"
             >
               {/* Header */}
               <div className="flex items-center justify-between border-b border-white/60 pb-4">
@@ -983,12 +994,19 @@ export const AdminFontManager: React.FC = () => {
       {/* EDIT FONT MODAL */}
       <AnimatePresence>
         {editingFont && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md animate-fade-in">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md animate-fade-in overscroll-contain modal-backdrop-lock"
+            onClick={() => setEditingFont(null)}
+            onTouchMove={(e) => {
+              if (e.target === e.currentTarget) e.preventDefault();
+            }}
+          >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="liquid-glass-card shadow-2xl w-full max-w-lg p-6 space-y-5 border border-white/80"
+              onClick={(e) => e.stopPropagation()}
+              className="liquid-glass-card shadow-2xl w-full max-w-lg p-6 space-y-5 border border-white/80 max-h-[90vh] overflow-y-auto overscroll-y-contain modal-content-scroll"
             >
               <div className="flex items-center justify-between border-b border-white/60 pb-3">
                 <h3 className="font-heading font-bold text-base text-slate-900 flex items-center gap-2">

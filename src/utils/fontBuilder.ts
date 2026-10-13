@@ -367,8 +367,8 @@ export function buildOpentypeFont(project: FontProject): opentype.Font {
     unitsPerEm: 1024,
     ascender: 880,
     descender: -144,
-    designer: settings.designer || 'Fonty فونتي',
-    description: settings.description || 'تم الإنشاء بواسطة منصة Fonty فونتي',
+    designer: settings.designer || 'Fonty',
+    description: settings.description || 'تم الإنشاء بواسطة Fonty',
     copyright: settings.copyright || 'جميع الحقوق محفوظة',
     glyphs: fontGlyphs,
   });

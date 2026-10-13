@@ -4,6 +4,7 @@ import { registerDynamicFontFace } from '../utils/fontBuilder';
 import { downloadFontFile } from '../utils/fontDownloader';
 import { ensureGoogleFontLoaded } from '../data/googleFonts';
 import { FontStarRating } from './FontStarRating';
+import { useScrollLock } from '../hooks/useScrollLock';
 import {
   IconClose,
   IconDownload,
@@ -26,6 +27,9 @@ export const FontDetailModal: React.FC<FontDetailModalProps> = React.memo(({
   onClose,
   customText,
 }) => {
+  // Lock background scroll when font detail modal is shown
+  useScrollLock(!!fontItem);
+
   const [copiedCss, setCopiedCss] = useState(false);
   const [activeTab, setActiveTab] = useState<'preview' | 'glyphs' | 'code' | 'info'>('preview');
   const [previewSize, setPreviewSize] = useState(48);
@@ -67,8 +71,17 @@ export const FontDetailModal: React.FC<FontDetailModalProps> = React.memo(({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xl animate-fade-in">
-      <div className="apple-glass-modal shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden transition-all border border-white/80">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xl animate-fade-in overscroll-contain modal-backdrop-lock"
+      onClick={onClose}
+      onTouchMove={(e) => {
+        if (e.target === e.currentTarget) e.preventDefault();
+      }}
+    >
+      <div
+        className="apple-glass-modal shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden transition-all border border-white/80"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Modal Header */}
         <div className="p-6 border-b border-white/60 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -143,7 +156,7 @@ export const FontDetailModal: React.FC<FontDetailModalProps> = React.memo(({
         </div>
 
         {/* Modal Content */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+        <div className="p-6 overflow-y-auto flex-1 space-y-6 overscroll-y-contain modal-content-scroll">
           {activeTab === 'preview' && (
             <div className="space-y-6">
               {/* Controls */}

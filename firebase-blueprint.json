@@ -70,12 +70,30 @@
       "type": "object",
       "properties": {
         "id": { "type": "string", "description": "Setting key identifier", "maxLength": 100 },
+        "primaryDomain": { "type": "string", "description": "Primary custom domain for the platform", "maxLength": 200 },
+        "allowedDomains": { "type": "array", "description": "List of authorized deployment domains" },
+        "platform": { "type": "string", "description": "Hosting platform provider (e.g. Vercel)", "maxLength": 50 },
+        "status": { "type": "string", "description": "Configuration status", "maxLength": 50 },
         "announcementMsg": { "type": "string", "description": "Banner announcement message", "maxLength": 500 },
         "maintenanceMode": { "type": "boolean", "description": "Platform maintenance toggle" },
         "updatedAt": { "type": "string", "description": "Timestamp of modification" },
         "updatedBy": { "type": "string", "description": "Admin UID who made changes", "maxLength": 128 }
       },
       "required": ["id"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "System event and developer audit log in Fonty",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Log identifier", "maxLength": 128 },
+        "type": { "type": "string", "description": "Event type", "maxLength": 100 },
+        "msg": { "type": "string", "description": "Event description message", "maxLength": 500 },
+        "level": { "type": "string", "description": "Severity level", "maxLength": 20 },
+        "timestamp": { "type": "string", "description": "ISO timestamp of event" },
+        "actorUid": { "type": "string", "description": "UID of initiating user or admin", "maxLength": 128 }
+      },
+      "required": ["id", "type", "msg"]
     }
   },
   "firestore": {
@@ -98,6 +116,10 @@
     "/systemSettings/{settingId}": {
       "schema": "SystemSetting",
       "description": "System broadcast messages and maintenance parameters"
+    },
+    "/auditLogs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Real-time audit log stream for developers and administrators"
     }
   }
 }

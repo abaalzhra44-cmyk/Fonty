@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { GlyphItem, RulerPoint } from '../types';
 import { IconClose, IconRefresh, IconRuler } from './icons/Icons';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 interface RulerModalProps {
   isOpen: boolean;
@@ -19,6 +20,9 @@ export const RulerModal: React.FC<RulerModalProps> = React.memo(({
   onFlipVertical,
   onClose,
 }) => {
+  // Lock background scroll when ruler modal is active
+  useScrollLock(isOpen && !!glyph);
+
   const [points, setPoints] = useState<RulerPoint[]>([]);
 
   if (!isOpen || !glyph) return null;
@@ -52,8 +56,17 @@ export const RulerModal: React.FC<RulerModalProps> = React.memo(({
   const midY = p1 && p2 ? (p1.y + p2.y) / 2 : 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xl animate-fade-in">
-      <div className="apple-glass-modal shadow-2xl w-full max-w-2xl p-6 relative flex flex-col max-h-[90vh] border border-white/80">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xl animate-fade-in overscroll-contain modal-backdrop-lock"
+      onClick={onClose}
+      onTouchMove={(e) => {
+        if (e.target === e.currentTarget) e.preventDefault();
+      }}
+    >
+      <div
+        className="apple-glass-modal shadow-2xl w-full max-w-2xl p-6 relative flex flex-col max-h-[90vh] border border-white/80"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/60 mb-4">
           <div className="flex items-center gap-3">

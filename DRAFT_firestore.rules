@@ -55,6 +55,12 @@ service cloud.firestore {
       return data.id is string && isValidId(data.id);
     }
 
+    function isValidAuditLog(data) {
+      return data.id is string && isValidId(data.id) &&
+             data.type is string && data.type.size() > 0 && data.type.size() <= 100 &&
+             data.msg is string && data.msg.size() > 0 && data.msg.size() <= 500;
+    }
+
     // 1. Users collection
     match /users/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
@@ -105,6 +111,13 @@ service cloud.firestore {
       allow get: if true;
       allow list: if isSignedIn();
       allow write: if isAdmin() && isValidId(settingId) && isValidSystemSetting(incoming());
+    }
+
+    // 6. Audit Logs collection (Admin & Developer)
+    match /auditLogs/{logId} {
+      allow get, list: if isAdmin();
+      allow create: if isSignedIn() && isValidId(logId) && isValidAuditLog(incoming());
+      allow update, delete: if isAdmin();
     }
   }
 }

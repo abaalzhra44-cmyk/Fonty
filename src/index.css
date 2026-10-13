@@ -490,4 +490,30 @@
   border-bottom: 1px solid rgba(241, 245, 249, 0.6);
 }
 
+/* ==========================================================================
+   12. Central Background Scroll Lock & Overscroll Isolation
+   ========================================================================== */
+
+html.modal-scroll-locked,
+body.modal-scroll-locked {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  touch-action: none !important;
+}
+
+/* Modal overlay backdrop isolation */
+.modal-backdrop-lock {
+  overscroll-behavior: contain !important;
+  overscroll-behavior-y: contain !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Modal scrollable internal container */
+.modal-content-scroll {
+  overscroll-behavior: contain !important;
+  overscroll-behavior-y: contain !important;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
 

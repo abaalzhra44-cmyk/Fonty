@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useScrollLock } from '../hooks/useScrollLock';
 import {
   IconSparkles,
   IconCheck,
@@ -16,6 +17,9 @@ import {
 export const RegistrationOnboardingModal: React.FC = () => {
   const { user, showSignupOnboarding, closeSignupOnboarding } = useAuth();
   const [currentStep, setCurrentStep] = useState<number>(1);
+
+  // Lock background scroll when registration onboarding modal is shown
+  useScrollLock(showSignupOnboarding && !!user);
 
   if (!showSignupOnboarding || !user) return null;
 
@@ -36,9 +40,15 @@ export const RegistrationOnboardingModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md animate-fadeIn dir-rtl">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md animate-fadeIn dir-rtl overscroll-contain modal-backdrop-lock"
+      onClick={closeSignupOnboarding}
+      onTouchMove={(e) => {
+        if (e.target === e.currentTarget) e.preventDefault();
+      }}
+    >
       <div
-        className="relative w-full max-w-2xl bg-white/85 backdrop-blur-2xl border border-white/90 rounded-3xl shadow-2xl shadow-slate-900/10 overflow-hidden text-slate-900 transition-all ring-1 ring-slate-900/5"
+        className="relative w-full max-w-2xl max-h-[92vh] flex flex-col bg-white/85 backdrop-blur-2xl border border-white/90 rounded-3xl shadow-2xl shadow-slate-900/10 overflow-hidden text-slate-900 transition-all ring-1 ring-slate-900/5"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Ambient top light glow */}
@@ -54,14 +64,14 @@ export const RegistrationOnboardingModal: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="font-heading font-extrabold text-lg text-slate-900">
-                  دليل البداية والإرشاد لمنصة Fonty فونتي
+                  دليل البداية والإرشاد السريع
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-sky-100 to-purple-100 text-sky-800 border border-sky-200 text-[10px] font-bold">
                   خطوة {currentStep} من {totalSteps}
                 </span>
               </div>
               <p className="font-body text-xs text-slate-500 mt-0.5">
-                مرحباً بك كعضو جديد في المنصة السحابية المتقدمة لبناء الخطوط العربية
+                مرحباً بك كعضو جديد في استوديو بناء وتطوير الخطوط العربية
               </p>
             </div>
           </div>
@@ -85,7 +95,7 @@ export const RegistrationOnboardingModal: React.FC = () => {
         </div>
 
         {/* Dynamic Wizard Steps Content */}
-        <div className="p-6 sm:p-8 relative z-10 min-h-[340px] flex flex-col justify-between">
+        <div className="p-6 sm:p-8 relative z-10 min-h-[340px] flex-1 overflow-y-auto overscroll-y-contain modal-content-scroll flex flex-col justify-between">
           {/* STEP 1: Welcome & Intro */}
           {currentStep === 1 && (
             <div className="space-y-6 animate-fadeIn">
@@ -100,7 +110,7 @@ export const RegistrationOnboardingModal: React.FC = () => {
                     أهلاً بك يا {user.username}! 🎉
                   </h3>
                   <p className="font-body text-xs text-slate-600 mt-1 leading-relaxed">
-                    تم إنشاء حسابك بنجاح في <strong className="text-sky-700 font-extrabold">منصة Fonty فونتي</strong>. أنت الآن جاهز لبناء وتصميم وتصدير الخطوط العربية الاحترافية والملونة 3D.
+                    تم إنشاء حسابك بنجاح. أنت الآن جاهز لبناء وتصميم وتصدير الخطوط العربية الاحترافية والملونة 3D.
                   </p>
                 </div>
               </div>

@@ -45,7 +45,7 @@ export const defaultColorFontSettings: ColorFontSettings = {
 export const defaultFontSettings: FontSettings = {
   fontName: 'خط جديد',
   designer: 'مصمم عربي',
-  description: 'خط عربي مخصص تم إنشاؤه عبر منصة Fonty فونتي',
+  description: 'خط عربي مخصص تم إنشاؤه عبر Fonty',
   copyright: 'جميع الحقوق محفوظة',
   license: 'OFL',
   advanceWidthMode: 'auto',
