@@ -27,7 +27,7 @@ export const WelcomePage: React.FC = () => {
         <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-gradient-to-r from-sky-500/10 via-blue-500/10 to-indigo-500/10 border border-sky-500/20 text-sky-600 text-xs font-bold shadow-sm">
           <span className="w-2 h-2 rounded-full bg-sky-500 animate-ping" />
           <IconSparkles size={16} />
-          <span>استوديو دكتور الخطوط الرقمي</span>
+          <span>استوديو Fonty فونتي الرقمي</span>
         </div>
 
         {/* Main Title */}

@@ -62,7 +62,7 @@ export const LabPage: React.FC = () => {
   const [fileError, setFileError] = useState<string | null>(null);
 
   // Live preview state
-  const [sampleText, setSampleText] = useState('دكتور الخطوط - أبجد هوز حطي كلمن');
+  const [sampleText, setSampleText] = useState('Fonty فونتي - أبجد هوز حطي كلمن');
   const [dynamicFontFamily, setDynamicFontFamily] = useState('sans-serif');
 
   // Modals state
@@ -441,7 +441,7 @@ export const LabPage: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${project.settings.fontName || 'DoctorFont'}_Static.ttf`;
+    a.download = `${project.settings.fontName || 'Fonty'}_Static.ttf`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -455,13 +455,13 @@ export const LabPage: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${project.settings.fontName || 'DoctorColorFont'}_COLR.ttf`;
+      a.download = `${project.settings.fontName || 'FontyColorFont'}_COLR.ttf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch {
-      alert('حدث خطأ أثناء تصدير الخط الملون');
+    } catch (err) {
+      console.error('حدث خطأ أثناء تصدير الخط الملون', err);
     }
   }, [project]);
 
@@ -1414,7 +1414,7 @@ export const LabPage: React.FC = () => {
             {/* Dynamic Rendered Font Canvas & Vector Engine */}
             <FontVectorRenderer
               project={project}
-              text={sampleText || 'دكتور الخطوط'}
+              text={sampleText || 'Fonty فونتي'}
               fontSize={44}
               fontFamilyName={dynamicFontFamily}
             />

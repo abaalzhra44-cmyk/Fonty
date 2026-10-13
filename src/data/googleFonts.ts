@@ -176,7 +176,7 @@ export const GOOGLE_ARABIC_FONTS_DEFINITIONS: GoogleFontDefinition[] = [
     googleFontQuery: 'Reem+Kufi:wght@400;500;600;700',
     tags: ['خط حُر', 'كوفي', 'شعارات', 'هندسي', 'تراثي'],
     weights: ['Regular', 'Medium', 'SemiBold', 'Bold'],
-    sampleText: 'دكتور الخطوط - تصميم خط كوفي متميز للهويات والتصاميم',
+    sampleText: 'Fonty فونتي - تصميم خط كوفي متميز للهويات والتصاميم',
   },
   {
     id: 'tajawal',

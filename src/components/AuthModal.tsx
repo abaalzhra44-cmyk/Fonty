@@ -12,7 +12,7 @@ import {
 } from './icons/Icons';
 
 export const AuthModal: React.FC = React.memo(() => {
-  const { showAuthModal, closeAuthModal, authModalMode, login, signup } = useAuth();
+  const { showAuthModal, closeAuthModal, authModalMode, login, signup, loginWithGoogle } = useAuth();
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>(authModalMode);
 
   // Form states
@@ -22,6 +22,7 @@ export const AuthModal: React.FC = React.memo(() => {
   const [selectedAvatar, setSelectedAvatar] = useState(AVATAR_PRESETS[0]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -48,6 +49,21 @@ export const AuthModal: React.FC = React.memo(() => {
         }
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setErrorMsg(null);
+    setIsGoogleLoading(true);
+    try {
+      const res = await loginWithGoogle();
+      if (!res.success && res.error) {
+        setErrorMsg(res.error);
+      }
+    } catch {
+      setErrorMsg('تعذر تسجيل الدخول عبر Google');
+    } finally {
+      setIsGoogleLoading(false);
     }
   };
 
@@ -93,8 +109,8 @@ export const AuthModal: React.FC = React.memo(() => {
               <IconSparkles size={20} />
             </div>
             <div>
-              <h2 className="font-heading font-bold text-lg text-slate-900">
-                دكتور الخطوط
+              <h2 className="font-heading font-extrabold text-base text-slate-900">
+                Fonty فونتي
               </h2>
               <p className="text-xs text-slate-500">
                 {activeTab === 'signup' ? 'إنشاء حساب جديد للاستوديو' : 'تسجيل الدخول للتحكم بالمشاريع'}
@@ -103,22 +119,62 @@ export const AuthModal: React.FC = React.memo(() => {
           </div>
           <button
             onClick={closeAuthModal}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-white/60 transition-colors"
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-white/60 transition-colors cursor-pointer"
             title="إغلاق"
           >
             <IconClose size={20} />
           </button>
         </div>
 
+        {/* Google Sign-In with Firebase Auth */}
+        <div className="px-6 pt-4">
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={isGoogleLoading || isSubmitting}
+            className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 text-slate-800 font-heading font-semibold text-xs border border-slate-200/90 shadow-sm flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+          >
+            {isGoogleLoading ? (
+              <span className="w-4 h-4 border-2 border-sky-600 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                />
+              </svg>
+            )}
+            <span>الدخول السريع عبر Google (Firebase)</span>
+          </button>
+
+          <div className="flex items-center my-3.5 gap-2">
+            <div className="flex-1 h-px bg-slate-200" />
+            <span className="text-[11px] text-slate-400 font-medium">أو بالبريد وكلمة المرور</span>
+            <div className="flex-1 h-px bg-slate-200" />
+          </div>
+        </div>
+
         {/* Tab Toggle Switch */}
-        <div className="p-1.5 mx-6 mt-4 bg-white/40 backdrop-blur-md rounded-2xl flex gap-1 border border-white/60">
+        <div className="p-1 mx-6 bg-white/40 backdrop-blur-md rounded-2xl flex gap-1 border border-white/60">
           <button
             type="button"
             onClick={() => {
               setActiveTab('signup');
               setErrorMsg(null);
             }}
-            className={`flex-1 py-2 rounded-xl text-xs font-heading font-bold transition-all ${
+            className={`flex-1 py-1.5 rounded-xl text-xs font-heading font-bold transition-all cursor-pointer ${
               activeTab === 'signup'
                 ? 'bg-white/90 text-sky-600 shadow-xs border border-white/90'
                 : 'text-slate-600 hover:text-slate-900'
@@ -132,7 +188,7 @@ export const AuthModal: React.FC = React.memo(() => {
               setActiveTab('login');
               setErrorMsg(null);
             }}
-            className={`flex-1 py-2 rounded-xl text-xs font-heading font-bold transition-all ${
+            className={`flex-1 py-1.5 rounded-xl text-xs font-heading font-bold transition-all cursor-pointer ${
               activeTab === 'login'
                 ? 'bg-white/90 text-sky-600 shadow-xs border border-white/90'
                 : 'text-slate-600 hover:text-slate-900'
@@ -143,7 +199,7 @@ export const AuthModal: React.FC = React.memo(() => {
         </div>
 
         {/* Form body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 pt-3 space-y-4">
           {errorMsg && (
             <div className="p-3.5 rounded-2xl bg-rose-500/15 border border-rose-400/30 text-rose-700 text-xs font-medium leading-relaxed animate-shake">
               {errorMsg}
@@ -166,7 +222,7 @@ export const AuthModal: React.FC = React.memo(() => {
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="absolute -bottom-1 -right-1 p-1.5 rounded-full bg-sky-600 text-white shadow-lg hover:bg-sky-500 transition-colors"
+                    className="absolute -bottom-1 -right-1 p-1.5 rounded-full bg-sky-600 text-white shadow-lg hover:bg-sky-500 transition-colors cursor-pointer"
                     title="رفع صورة خاصة"
                   >
                     <IconCamera size={14} />
@@ -180,23 +236,27 @@ export const AuthModal: React.FC = React.memo(() => {
                   />
                 </div>
 
-                <div className="flex-1 space-y-1">
-                  <span className="text-[11px] text-slate-500">
-                    اختر رمزاً تعبيرياً أو ارفع صورة شخصية:
+                <div className="flex-1">
+                  <span className="text-[11px] text-slate-500 block mb-1">
+                    أو اختر شخصية رمزية جاهزة:
                   </span>
-                  <div className="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     {AVATAR_PRESETS.map((preset, idx) => (
                       <button
                         key={idx}
                         type="button"
                         onClick={() => setSelectedAvatar(preset)}
-                        className={`relative w-8 h-8 rounded-full overflow-hidden border-2 transition-transform ${
+                        className={`w-7 h-7 rounded-full overflow-hidden border-2 transition-transform active:scale-90 relative cursor-pointer ${
                           selectedAvatar === preset
-                            ? 'border-sky-500 scale-110 ring-2 ring-sky-500/30'
-                            : 'border-transparent opacity-70 hover:opacity-100'
+                            ? 'border-sky-600 scale-105 ring-2 ring-sky-300'
+                            : 'border-white/80 opacity-70 hover:opacity-100'
                         }`}
                       >
-                        <img src={preset} alt={`Avatar ${idx}`} className="w-full h-full object-cover" />
+                        <img
+                          src={preset}
+                          alt="Preset avatar"
+                          className="w-full h-full object-cover"
+                        />
                         {selectedAvatar === preset && (
                           <div className="absolute inset-0 bg-sky-500/20 flex items-center justify-center text-sky-600">
                             <IconCheck size={12} />
@@ -278,7 +338,7 @@ export const AuthModal: React.FC = React.memo(() => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-3 mt-2 rounded-xl bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 hover:from-sky-500 hover:to-blue-600 text-white font-heading font-bold text-sm shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50 border border-white/30"
+            className="w-full py-3 mt-2 rounded-xl bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 hover:from-sky-500 hover:to-blue-600 text-white font-heading font-bold text-sm shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50 border border-white/30 cursor-pointer"
           >
             {isSubmitting ? (
               <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

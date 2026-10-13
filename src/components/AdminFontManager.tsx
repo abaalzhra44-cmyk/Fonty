@@ -45,7 +45,7 @@ export const AdminFontManager: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('الكل');
   const [selectedStatus, setSelectedStatus] = useState<string>('الكل');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sampleText, setSampleText] = useState('أبجد هوز حطي كلمن سعفص قرشت — دكتور الخطوط');
+  const [sampleText, setSampleText] = useState('أبجد هوز حطي كلمن سعفص قرشت — Fonty فونتي');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [chartView, setChartView] = useState<'area' | 'bar'>('area');
 
@@ -172,7 +172,7 @@ export const AdminFontManager: React.FC = () => {
         name: formName.trim(),
         nameEn: formNameEn.trim() || formName.trim(),
         category: formCategory,
-        designer: formDesigner.trim() || 'دكتور الخطوط',
+        designer: formDesigner.trim() || 'Fonty فونتي',
         description: formDescription.trim() || 'خط عربي مميز تمت إضافته وتصنيفه في لوحة تحكم الإدارة.',
         status: formStatus,
         fileName: uploadedFile ? uploadedFile.name : `${formNameEn || 'font'}.${fileTypeStr.toLowerCase()}`,

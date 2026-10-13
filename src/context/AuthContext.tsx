@@ -1,11 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { auth, db, signInWithGoogle, logOutFirebase, handleFirestoreError, OperationType } from '../firebase';
 import { detectDeviceType, getClientIpAddress } from '../utils/deviceHelper';
 
 export interface UserAccount {
   id: string;
   username: string;
   email: string;
-  passwordHash: string; // Stored securely in localStorage
+  passwordHash?: string;
   avatarUrl: string;
   createdAt: string;
   role?: 'user' | 'admin' | 'developer';
@@ -13,6 +16,7 @@ export interface UserAccount {
   isBlocked?: boolean;
   deviceType?: string;
   ipAddress?: string;
+  isFirebaseAuth?: boolean;
 }
 
 export const AVATAR_PRESETS = [
@@ -25,9 +29,9 @@ export const AVATAR_PRESETS = [
 ];
 
 export const DEV_ACCOUNT: UserAccount = {
-  id: 'usr_dev_drfont',
-  username: 'Dr Font',
-  email: 'dr.font@doctorfonts.dev',
+  id: 'usr_dev_fonty',
+  username: 'Fonty Admin',
+  email: 'admin@fonty.dev',
   passwordHash: 'Yaya2h7s2nss',
   avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
   createdAt: '2026-01-01T00:00:00.000Z',
@@ -39,13 +43,15 @@ export const DEV_ACCOUNT: UserAccount = {
 
 interface AuthContextType {
   user: UserAccount | null;
+  firebaseUser: FirebaseUser | null;
   isLoggedIn: boolean;
   isAdmin: boolean;
   isDeveloper: boolean;
   signup: (data: { username: string; email: string; password: string; avatarUrl?: string }) => { success: boolean; error?: string };
   login: (data: { identifier: string; password: string }) => { success: boolean; error?: string };
-  logout: () => void;
-  updateProfile: (data: { username?: string; avatarUrl?: string; password?: string }) => { success: boolean; error?: string };
+  loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
+  updateProfile: (data: { username?: string; avatarUrl?: string; password?: string }) => Promise<{ success: boolean; error?: string }>;
   getAllUsers: () => UserAccount[];
   adminUpdateUser: (userId: string, data: Partial<UserAccount>) => boolean;
   adminDeleteUser: (userId: string) => boolean;
@@ -62,11 +68,12 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const USERS_STORAGE_KEY = 'doctor_fonts_registered_users_v1';
-const CURRENT_USER_ID_KEY = 'doctor_fonts_active_user_id_v1';
+const USERS_STORAGE_KEY = 'fonty_registered_users_v1';
+const CURRENT_USER_ID_KEY = 'fonty_active_user_id_v1';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserAccount | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'signup'>('signup');
   const [showSignupOnboarding, setShowSignupOnboarding] = useState<boolean>(false);
@@ -74,10 +81,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const getRegisteredUsers = (): UserAccount[] => {
     try {
-      const usersRaw = localStorage.getItem(USERS_STORAGE_KEY);
+      const usersRaw = localStorage.getItem(USERS_STORAGE_KEY) || localStorage.getItem('doctor_fonts_registered_users_v1');
       let users: UserAccount[] = usersRaw ? JSON.parse(usersRaw) : [];
-      
-      // Purge any legacy Tarek accounts immediately
+
+      // Purge any legacy accounts
       users = users.filter(
         (u) =>
           u.id !== 'usr_dev_tarek' &&
@@ -89,54 +96,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const devIndex = users.findIndex(
         (u) =>
           u.username.toLowerCase() === DEV_ACCOUNT.username.toLowerCase() ||
-          u.username.toLowerCase().replace(/\s+/g, '') === 'drfont' ||
           u.id === DEV_ACCOUNT.id
       );
       if (devIndex === -1) {
         users = [DEV_ACCOUNT, ...users];
       } else {
-        // Ensure developer credentials and username stay updated
         users[devIndex].username = DEV_ACCOUNT.username;
         users[devIndex].email = DEV_ACCOUNT.email;
         users[devIndex].role = 'developer';
         users[devIndex].isDeveloper = true;
-        users[devIndex].passwordHash = DEV_ACCOUNT.passwordHash;
-        users[devIndex].deviceType = users[devIndex].deviceType || DEV_ACCOUNT.deviceType;
-        users[devIndex].ipAddress = users[devIndex].ipAddress || DEV_ACCOUNT.ipAddress;
       }
 
-      // Ensure every user has deviceType and ipAddress
-      const sampleDevices = [
-        'Chrome - ويندوز (Windows 11)',
-        'Safari - آيفون (iOS 17)',
-        'Edge - أندرويد (Android 14)',
-        'Firefox - ماك (macOS Sonoma)',
-        'Chrome - أندرويد (Galaxy S24)',
-      ];
-      const sampleIps = [
-        '197.38.112.42',
-        '156.204.88.19',
-        '41.233.150.88',
-        '197.45.19.162',
-        '102.189.44.12',
-      ];
-
-      let modified = false;
-      users = users.map((u, idx) => {
-        let updatedUser = { ...u };
-        if (!updatedUser.deviceType) {
-          updatedUser.deviceType = sampleDevices[idx % sampleDevices.length];
-          modified = true;
-        }
-        if (!updatedUser.ipAddress) {
-          updatedUser.ipAddress = sampleIps[idx % sampleIps.length];
-          modified = true;
-        }
-        return updatedUser;
-      });
-
       localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
-
       return users;
     } catch {
       return [DEV_ACCOUNT];
@@ -147,26 +118,94 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
   };
 
-  // Load active user session on startup
+  // Sync Firebase Auth state
   useEffect(() => {
-    try {
-      const users = getRegisteredUsers();
-      const activeUserId = localStorage.getItem(CURRENT_USER_ID_KEY);
-      if (activeUserId) {
-        const found = users.find((u) => u.id === activeUserId);
-        if (found) {
-          if (found.isBlocked) {
-            localStorage.removeItem(CURRENT_USER_ID_KEY);
-            setUser(null);
-          } else {
-            setUser(found);
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      setFirebaseUser(fbUser);
+      if (fbUser) {
+        try {
+          const userDocRef = doc(db, 'users', fbUser.uid);
+          let userProfile: UserAccount;
+
+          try {
+            const snap = await getDoc(userDocRef);
+            if (snap.exists()) {
+              userProfile = snap.data() as UserAccount;
+            } else {
+              const isAdminEmail =
+                fbUser.email === 'abaalzhra44@gmail.com' ||
+                fbUser.email === 'admin@fonty.dev';
+
+              userProfile = {
+                id: fbUser.uid,
+                username: fbUser.displayName || 'مستخدم فونتي',
+                email: fbUser.email || '',
+                avatarUrl: fbUser.photoURL || AVATAR_PRESETS[0],
+                role: isAdminEmail ? 'admin' : 'user',
+                isDeveloper: isAdminEmail,
+                createdAt: new Date().toISOString(),
+                deviceType: detectDeviceType(),
+                ipAddress: getClientIpAddress(),
+                isFirebaseAuth: true,
+              };
+
+              await setDoc(userDocRef, userProfile);
+            }
+          } catch (err) {
+            handleFirestoreError(err, OperationType.GET, `users/${fbUser.uid}`);
           }
+
+          setUser(userProfile);
+          localStorage.setItem(CURRENT_USER_ID_KEY, userProfile.id);
+        } catch (error) {
+          console.warn('Firebase user sync note:', error);
+          // Fallback to local profile object for current Firebase user
+          const fallbackUser: UserAccount = {
+            id: fbUser.uid,
+            username: fbUser.displayName || 'مستخدم فونتي',
+            email: fbUser.email || '',
+            avatarUrl: fbUser.photoURL || AVATAR_PRESETS[0],
+            role: fbUser.email === 'abaalzhra44@gmail.com' ? 'admin' : 'user',
+            createdAt: new Date().toISOString(),
+            isFirebaseAuth: true,
+          };
+          setUser(fallbackUser);
+        }
+      } else {
+        // If no Firebase user, check local storage session
+        const users = getRegisteredUsers();
+        const activeUserId = localStorage.getItem(CURRENT_USER_ID_KEY);
+        if (activeUserId) {
+          const found = users.find((u) => u.id === activeUserId);
+          if (found && !found.isBlocked) {
+            setUser(found);
+          } else {
+            setUser(null);
+          }
+        } else {
+          setUser(null);
         }
       }
-    } catch (e) {
-      console.error('Failed to load user session from localStorage', e);
-    }
+    });
+
+    return () => unsubscribe();
   }, []);
+
+  const loginWithGoogle = async (): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const fbUser = await signInWithGoogle();
+      if (!fbUser) {
+        return { success: false, error: 'تعذر إتمام تسجيل الدخول عبر Google' };
+      }
+      setShowAuthModal(false);
+      setShowWelcomeBack(true);
+      return { success: true };
+    } catch (err: unknown) {
+      console.error('Google Sign In error:', err);
+      const msg = err instanceof Error ? err.message : 'فشل تسجيل الدخول باستخدام Google';
+      return { success: false, error: msg };
+    }
+  };
 
   const signup = ({
     username,
@@ -193,15 +232,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const users = getRegisteredUsers();
-
-    // Check if email or username exists
-    const emailExists = users.some((u) => u.email.toLowerCase() === cleanEmail);
-    if (emailExists) {
+    if (users.some((u) => u.email.toLowerCase() === cleanEmail)) {
       return { success: false, error: 'البريد الإلكتروني مسجل بالفعل! حاول تسجيل الدخول.' };
     }
-
-    const usernameExists = users.some((u) => u.username.toLowerCase() === cleanUsername.toLowerCase());
-    if (usernameExists) {
+    if (users.some((u) => u.username.toLowerCase() === cleanUsername.toLowerCase())) {
       return { success: false, error: 'اسم المستخدم محجوز بالفعل! يرجى اختيار اسم آخر.' };
     }
 
@@ -209,11 +243,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       username: cleanUsername,
       email: cleanEmail,
-      passwordHash: password, // client storage
+      passwordHash: password,
       avatarUrl: avatarUrl || AVATAR_PRESETS[0],
       createdAt: new Date().toISOString(),
       deviceType: detectDeviceType(),
       ipAddress: getClientIpAddress(),
+      role: 'user',
     };
 
     const updatedUsers = [...users, newUser];
@@ -258,10 +293,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (found.isBlocked) {
-      return { success: false, error: 'تم حظر هذا الحساب من قبل الإدارة. اتصل بالدعم لمزيد من التفاصيل.' };
+      return { success: false, error: 'تم حظر هذا الحساب من قبل الإدارة.' };
     }
 
-    // Update active device & ip on login
     found.deviceType = detectDeviceType();
     found.ipAddress = getClientIpAddress();
     const updatedUsers = users.map((u) => (u.id === found.id ? found : u));
@@ -275,12 +309,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true };
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await logOutFirebase();
+    } catch {
+      // Ignore
+    }
     localStorage.removeItem(CURRENT_USER_ID_KEY);
     setUser(null);
   };
 
-  const updateProfile = ({
+  const updateProfile = async ({
     username,
     avatarUrl,
     password,
@@ -288,39 +327,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     username?: string;
     avatarUrl?: string;
     password?: string;
-  }): { success: boolean; error?: string } => {
+  }): Promise<{ success: boolean; error?: string }> => {
     if (!user) return { success: false, error: 'لم يتم تسجيل الدخول.' };
 
-    const users = getRegisteredUsers();
-    const userIndex = users.findIndex((u) => u.id === user.id);
-    if (userIndex === -1) return { success: false, error: 'المستخدم غير موجود.' };
-
     const updatedUser = { ...user };
-
-    if (username && username.trim() !== user.username) {
-      const cleanName = username.trim();
-      if (cleanName.length < 3) {
-        return { success: false, error: 'اسم المستخدم قصير جداً.' };
-      }
-      const exists = users.some(
-        (u) => u.id !== user.id && u.username.toLowerCase() === cleanName.toLowerCase()
-      );
-      if (exists) {
-        return { success: false, error: 'اسم المستخدم مستخدم بالفعل.' };
-      }
-      updatedUser.username = cleanName;
+    if (username && username.trim()) {
+      updatedUser.username = username.trim();
     }
-
     if (avatarUrl) {
       updatedUser.avatarUrl = avatarUrl;
     }
-
     if (password && password.trim().length >= 6) {
       updatedUser.passwordHash = password.trim();
     }
 
-    users[userIndex] = updatedUser;
-    saveUsers(users);
+    // If Firebase user, update Firestore
+    if (auth.currentUser && user.id === auth.currentUser.uid) {
+      try {
+        const userDocRef = doc(db, 'users', user.id);
+        await setDoc(userDocRef, {
+          username: updatedUser.username,
+          avatarUrl: updatedUser.avatarUrl,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `users/${user.id}`);
+      }
+    }
+
+    const users = getRegisteredUsers();
+    const idx = users.findIndex((u) => u.id === user.id);
+    if (idx !== -1) {
+      users[idx] = updatedUser;
+      saveUsers(users);
+    }
     setUser(updatedUser);
 
     return { success: true };
@@ -349,14 +389,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const target = users.find((u) => u.id === userId);
     if (
       target &&
-      (target.username.toLowerCase().includes('dr font') ||
-        target.username.toLowerCase().includes('drfont') ||
-        target.username.toLowerCase().includes('tarek') ||
-        target.role === 'developer' ||
-        target.isDeveloper ||
-        target.id === DEV_ACCOUNT.id)
+      (target.role === 'developer' || target.isDeveloper || target.id === DEV_ACCOUNT.id)
     ) {
-      return false; // Prevent deleting main developer account
+      return false;
     }
 
     const filtered = users.filter((u) => u.id !== userId);
@@ -412,13 +447,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     (user.role === 'admin' ||
       user.role === 'developer' ||
       user.isDeveloper ||
-      user.username.toLowerCase().includes('tarek'));
+      user.email === 'abaalzhra44@gmail.com' ||
+      user.email === 'admin@fonty.dev');
 
   const isDeveloper =
     !!user &&
     (user.role === 'developer' ||
       user.isDeveloper ||
-      user.username.toLowerCase().includes('tarek'));
+      user.email === 'admin@fonty.dev');
 
   const openAuthModal = (mode: 'login' | 'signup' = 'signup') => {
     setAuthModalMode(mode);
@@ -441,11 +477,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider
       value={{
         user,
+        firebaseUser,
         isLoggedIn: !!user,
         isAdmin,
         isDeveloper,
         signup,
         login,
+        loginWithGoogle,
         logout,
         updateProfile,
         getAllUsers,

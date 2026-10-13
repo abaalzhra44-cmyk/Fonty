@@ -221,7 +221,7 @@ export function generateColorWebPackage(project: FontProject): {
   html: string;
   readme: string;
 } {
-  const fontName = project.settings.fontName || 'DoctorColorFont';
+  const fontName = project.settings.fontName || 'FontyColorFont';
   const colorSettings = project.settings.colorFontSettings || defaultColorFontSettings;
 
   const paletteRules = (colorSettings.palettes || []).map((p, idx) => `
@@ -234,7 +234,7 @@ export function generateColorWebPackage(project: FontProject): {
 
   const css = `/* ==========================================================
  * ${fontName} - OpenType Color Font (COLR/CPAL) Integration CSS
- * تم التوليد بواسطة دكتور الخطوط (Doctor Fonts)
+ * تم التوليد بواسطة Fonty فونتي (Fonty Studio)
  * ========================================================== */
 
 @font-face {

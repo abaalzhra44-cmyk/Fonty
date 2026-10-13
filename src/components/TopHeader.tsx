@@ -18,7 +18,7 @@ export const TopHeader: React.FC = React.memo(() => {
           </div>
           <div className="flex items-center gap-2">
             <span className="font-heading font-extrabold text-base md:text-lg text-slate-900 tracking-tight group-hover:text-sky-600 transition-colors">
-              دكتور الخطوط
+              Fonty فونتي
             </span>
             <span className="px-2.5 py-0.5 rounded-full liquid-glass-badge text-sky-700 text-[10px] font-bold">
               منصة الخطوط العربية

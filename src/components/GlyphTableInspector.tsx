@@ -46,7 +46,7 @@ export const GlyphTableInspector: React.FC<GlyphTableInspectorProps> = React.mem
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const glyphList = glyphs || project?.glyphs || [];
-  const activeFontName = fontName || project?.settings?.fontName || 'DoctorFont';
+  const activeFontName = fontName || project?.settings?.fontName || 'Fonty';
 
   const triggerNotice = useCallback((msg: string) => {
     setActionNotice(msg);

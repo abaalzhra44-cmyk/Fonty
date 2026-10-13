@@ -362,13 +362,13 @@ export function buildOpentypeFont(project: FontProject): opentype.Font {
 
   // 4. Construct OpenType Font Object AFTER all glyphs (including auto fallback glyphs) are in fontGlyphs
   const font = new opentype.Font({
-    familyName: settings.fontName || 'DoctorFont',
+    familyName: settings.fontName || 'Fonty',
     styleName: 'Regular',
     unitsPerEm: 1024,
     ascender: 880,
     descender: -144,
-    designer: settings.designer || 'دكتور الخطوط',
-    description: settings.description || 'تم الإنشاء بواسطة دكتور الخطوط',
+    designer: settings.designer || 'Fonty فونتي',
+    description: settings.description || 'تم الإنشاء بواسطة منصة Fonty فونتي',
     copyright: settings.copyright || 'جميع الحقوق محفوظة',
     glyphs: fontGlyphs,
   });

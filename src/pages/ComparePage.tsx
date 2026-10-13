@@ -9,7 +9,7 @@ import {
 } from '../components/icons/Icons';
 
 export const ComparePage: React.FC = () => {
-  const [sampleText, setSampleText] = useState('دكتور الخطوط - منصة تحويل المخطوطات والرسوم إلى خطوط طباعية');
+  const [sampleText, setSampleText] = useState('Fonty فونتي - منصة تحويل المخطوطات والرسوم إلى خطوط طباعية');
   const [fontSize, setFontSize] = useState(32);
 
   const [fonts, setFonts] = useState<CompareFontItem[]>([
@@ -173,7 +173,7 @@ export const ComparePage: React.FC = () => {
                 style={{ fontFamily: f.fontFamily, fontSize: `${fontSize}px` }}
                 className="text-slate-900 whitespace-nowrap leading-normal"
               >
-                {sampleText || 'دكتور الخطوط'}
+                {sampleText || 'Fonty فونتي'}
               </p>
             </div>
           </div>

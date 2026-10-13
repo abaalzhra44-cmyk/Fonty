@@ -1,0 +1,103 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile in Fonty platform",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique user ID" },
+        "username": { "type": "string", "description": "Display name of the user", "maxLength": 100 },
+        "email": { "type": "string", "description": "User email address", "maxLength": 150 },
+        "avatarUrl": { "type": "string", "description": "Avatar URL", "maxLength": 500 },
+        "role": { "type": "string", "enum": ["user", "admin", "developer"], "description": "User authorization role" },
+        "isDeveloper": { "type": "boolean", "description": "Developer privileges flag" },
+        "isBlocked": { "type": "boolean", "description": "Account suspension status" },
+        "deviceType": { "type": "string", "description": "Device information", "maxLength": 150 },
+        "createdAt": { "type": "string", "description": "Account creation timestamp" },
+        "updatedAt": { "type": "string", "description": "Last profile update timestamp" }
+      },
+      "required": ["id", "username", "email", "role"]
+    },
+    "AdminRole": {
+      "title": "AdminRole",
+      "description": "Trusted admin role registry for RBAC checks",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User UID of admin" },
+        "email": { "type": "string", "description": "Email of admin" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["uid", "email"]
+    },
+    "FontProject": {
+      "title": "FontProject",
+      "description": "Arabic font project created or edited in Fonty Studio",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Project identifier", "maxLength": 128 },
+        "name": { "type": "string", "description": "Font project name", "maxLength": 150 },
+        "ownerId": { "type": "string", "description": "UID of font creator", "maxLength": 128 },
+        "isPublic": { "type": "boolean", "description": "Whether font is visible to public" },
+        "settings": { "type": "object", "description": "Font parameters and typographic settings" },
+        "glyphs": { "type": "array", "description": "Glyph list and vector curve paths" },
+        "createdAt": { "type": "number", "description": "Creation epoch millisecond" },
+        "updatedAt": { "type": "number", "description": "Last updated epoch millisecond" }
+      },
+      "required": ["id", "name", "ownerId", "settings"]
+    },
+    "SupportThread": {
+      "title": "SupportThread",
+      "description": "Technical support ticket thread between user and Fonty support",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Thread ID", "maxLength": 128 },
+        "userId": { "type": "string", "description": "UID or identifier of thread requester", "maxLength": 128 },
+        "userName": { "type": "string", "description": "Name of user", "maxLength": 100 },
+        "userEmail": { "type": "string", "description": "Email of user", "maxLength": 150 },
+        "userRole": { "type": "string", "description": "Role of user", "maxLength": 50 },
+        "status": { "type": "string", "enum": ["open", "pending", "resolved"], "description": "Support ticket status" },
+        "unreadCount": { "type": "number", "description": "Number of unread messages" },
+        "lastMessage": { "type": "string", "description": "Snippet of latest message", "maxLength": 500 },
+        "updatedAt": { "type": "string", "description": "Last message timestamp" },
+        "adminNotes": { "type": "string", "description": "Private administrative staff notes", "maxLength": 1000 },
+        "messages": { "type": "array", "description": "List of message objects in the thread" }
+      },
+      "required": ["id", "userName", "status"]
+    },
+    "SystemSetting": {
+      "title": "SystemSetting",
+      "description": "Global platform configurations and announcements",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Setting key identifier", "maxLength": 100 },
+        "announcementMsg": { "type": "string", "description": "Banner announcement message", "maxLength": 500 },
+        "maintenanceMode": { "type": "boolean", "description": "Platform maintenance toggle" },
+        "updatedAt": { "type": "string", "description": "Timestamp of modification" },
+        "updatedBy": { "type": "string", "description": "Admin UID who made changes", "maxLength": 128 }
+      },
+      "required": ["id"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of user profiles in Fonty"
+    },
+    "/admins/{adminId}": {
+      "schema": "AdminRole",
+      "description": "Trusted registry of administrator accounts for ABAC"
+    },
+    "/projects/{projectId}": {
+      "schema": "FontProject",
+      "description": "Arabic font projects and typography designs"
+    },
+    "/supportThreads/{threadId}": {
+      "schema": "SupportThread",
+      "description": "Support tickets and conversations"
+    },
+    "/systemSettings/{settingId}": {
+      "schema": "SystemSetting",
+      "description": "System broadcast messages and maintenance parameters"
+    }
+  }
+}

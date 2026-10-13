@@ -78,7 +78,7 @@ export const FontVectorRenderer: React.FC<FontVectorRendererProps> = React.memo(
           }}
           className="text-3xl text-slate-900 text-center leading-relaxed break-words w-full"
         >
-          {text || 'دكتور الخطوط'}
+          {text || 'Fonty فونتي'}
         </p>
       )}
     </div>

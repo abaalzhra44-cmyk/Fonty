@@ -29,7 +29,7 @@ export const FontDetailModal: React.FC<FontDetailModalProps> = React.memo(({
   const [copiedCss, setCopiedCss] = useState(false);
   const [activeTab, setActiveTab] = useState<'preview' | 'glyphs' | 'code' | 'info'>('preview');
   const [previewSize, setPreviewSize] = useState(48);
-  const [previewText, setPreviewText] = useState(customText || fontItem?.sampleText || 'دكتور الخطوط للطباعة الرقمية');
+  const [previewText, setPreviewText] = useState(customText || fontItem?.sampleText || 'Fonty فونتي للطباعة الرقمية');
   const [modalWeight, setModalWeight] = useState(400);
   const [modalSlant, setModalSlant] = useState(0);
 
@@ -240,7 +240,7 @@ export const FontDetailModal: React.FC<FontDetailModalProps> = React.memo(({
                       }}
                       className="text-slate-800 truncate"
                     >
-                      {previewText || 'بسم الله الرحمن الرحيم - دكتور الخطوط'}
+                      {previewText || 'بسم الله الرحمن الرحيم - Fonty فونتي'}
                     </p>
                   </div>
                 ))}

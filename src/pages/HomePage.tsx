@@ -90,12 +90,8 @@ export const HomePage: React.FC = () => {
 
   return (
     <div className="pb-32 pt-6 px-4 max-w-7xl mx-auto space-y-16 dir-rtl">
-      {/* Primary Liquid Glass Hero Section */}
-      <section className="relative overflow-hidden rounded-[2.5rem] liquid-glass-card p-8 md:p-14 text-center shadow-2xl shadow-sky-950/10 border border-white/80">
-        {/* Dynamic Refractive Liquid Blobs */}
-        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-gradient-to-tr from-sky-400/20 via-blue-500/15 to-indigo-500/10 rounded-full blur-3xl pointer-events-none animate-float-slow" />
-        <div className="absolute -bottom-32 right-10 w-[450px] h-[450px] bg-gradient-to-br from-teal-400/15 via-cyan-400/10 to-transparent rounded-full blur-3xl pointer-events-none animate-float-delayed" />
-
+      {/* Primary Hero Section */}
+      <section className="relative overflow-hidden rounded-[2.5rem] liquid-glass-card p-8 md:p-14 text-center shadow-xl shadow-slate-900/5 border border-white/80">
         <div className="relative z-10 max-w-3xl mx-auto space-y-7">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
@@ -107,9 +103,9 @@ export const HomePage: React.FC = () => {
           </motion.div>
 
           <h1 className="font-heading font-extrabold text-3xl md:text-5xl lg:text-6xl text-slate-900 leading-tight tracking-tight">
-            دكتور الخطوط <br />
+            Fonty فونتي <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600">
-              Doctor Fonts Studio
+              Fonty Studio
             </span>
           </h1>
 

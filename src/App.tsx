@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db, testFirestoreConnection } from './firebase';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { TopHeader } from './components/TopHeader';
 import { BottomNav } from './components/BottomNav';
-import { AnimatedBackground } from './components/AnimatedBackground';
 import { AuthModal } from './components/AuthModal';
 import { RegistrationOnboardingModal } from './components/RegistrationOnboardingModal';
 import { WelcomeBackModal } from './components/WelcomeBackModal';
@@ -55,15 +56,41 @@ const AnimatedRoutes: React.FC = () => {
 
 const MainAppContent: React.FC = () => {
   const { isLoggedIn, isAdmin } = useAuth();
+  const [remoteAnnouncement, setRemoteAnnouncement] = useState<string | null>(null);
+  const [remoteMaintenance, setRemoteMaintenance] = useState<boolean>(false);
 
-  const isMaintenanceMode = localStorage.getItem('df_maintenance_mode') === 'true';
-  const announcementActive = localStorage.getItem('df_announcement_active') === 'true';
-  const announcementMsg = localStorage.getItem('df_announcement_msg');
+  useEffect(() => {
+    // CRITICAL: Test Firestore connection handshake at boot
+    testFirestoreConnection().catch(() => {});
+
+    // Fetch system configurations from Firebase Firestore
+    async function loadSystemConfig() {
+      try {
+        const snap = await getDoc(doc(db, 'systemSettings', 'announcements'));
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.announcementMsg) setRemoteAnnouncement(data.announcementMsg);
+          if (typeof data.maintenanceMode === 'boolean') setRemoteMaintenance(data.maintenanceMode);
+        }
+      } catch {
+        // Fallback to local settings
+      }
+    }
+    loadSystemConfig();
+  }, []);
+
+  const localMaintenanceMode = localStorage.getItem('df_maintenance_mode') === 'true';
+  const isMaintenanceMode = remoteMaintenance || localMaintenanceMode;
+
+  const announcementActive = localStorage.getItem('df_announcement_active') !== 'false';
+  const rawAnnouncement = remoteAnnouncement || localStorage.getItem('df_announcement_msg');
+  const announcementMsg = rawAnnouncement && rawAnnouncement.includes('دكتور الخطوط')
+    ? rawAnnouncement.replace(/دكتور الخطوط/g, 'Fonty فونتي')
+    : rawAnnouncement || 'أهلاً بكم في منصة Fonty فونتي - المنظومة السحابية المتقدمة لإنتاج وتطوير الخطوط العربية!';
 
   if (isMaintenanceMode && !isAdmin) {
     return (
-      <div className="min-h-screen bg-slate-50/90 text-[#0f172a] flex flex-col font-body transition-colors duration-300 relative overflow-x-hidden">
-        <AnimatedBackground />
+      <div className="min-h-screen bg-[#f8fafc] text-[#0f172a] flex flex-col font-body transition-colors duration-300 relative overflow-x-hidden">
         <MaintenancePage />
         <AuthModal />
       </div>
@@ -71,7 +98,7 @@ const MainAppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/90 text-[#0f172a] flex flex-col font-body transition-colors duration-300 relative selection:bg-sky-500/20 selection:text-sky-800 overflow-x-hidden">
+    <div className="min-h-screen bg-[#f8fafc] text-[#0f172a] flex flex-col font-body transition-colors duration-300 relative selection:bg-sky-500/20 selection:text-sky-800 overflow-x-hidden">
       {/* Announcement Banner */}
       {announcementActive && announcementMsg && (
         <div className="bg-gradient-to-r from-sky-600 via-indigo-600 to-sky-700 text-white text-xs py-2 px-4 text-center font-medium shadow-sm relative z-30 flex items-center justify-center gap-2">
@@ -79,9 +106,6 @@ const MainAppContent: React.FC = () => {
           <span>{announcementMsg}</span>
         </div>
       )}
-
-      {/* Ambient Gradient Mesh Background (Liquid Glass Aesthetic) */}
-      <AnimatedBackground />
 
       {/* Top Sticky Header */}
       <TopHeader />

@@ -54,11 +54,11 @@ export const ColorFontPlayground: React.FC<Props> = ({ project }) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${project.settings.fontName || 'DoctorColorFont'}_COLR.ttf`;
+      a.download = `${project.settings.fontName || 'FontyColorFont'}_COLR.ttf`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      alert('حدث خطأ أثناء تصدير ملف الخط الملون');
+    } catch (err) {
+      console.error('حدث خطأ أثناء تصدير ملف الخط الملون', err);
     }
   };
 
@@ -72,6 +72,7 @@ export const ColorFontPlayground: React.FC<Props> = ({ project }) => {
       a.href = cssUrl;
       a.download = `color-font-style.css`;
       a.click();
+      URL.revokeObjectURL(cssUrl);
 
       setTimeout(() => {
         const blobHtml = new Blob([html], { type: 'text/html' });
@@ -80,9 +81,10 @@ export const ColorFontPlayground: React.FC<Props> = ({ project }) => {
         a2.href = htmlUrl;
         a2.download = `color-font-demo.html`;
         a2.click();
+        URL.revokeObjectURL(htmlUrl);
       }, 300);
-    } catch {
-      alert('حدث خطأ أثناء تصدير حزمة الويب');
+    } catch (err) {
+      console.error('حدث خطأ أثناء تصدير حزمة الويب', err);
     }
   };
 

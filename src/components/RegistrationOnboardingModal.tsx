@@ -54,7 +54,7 @@ export const RegistrationOnboardingModal: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="font-heading font-extrabold text-lg text-slate-900">
-                  دليل البداية والإرشاد لاستوديو دكتور الخطوط
+                  دليل البداية والإرشاد لمنصة Fonty فونتي
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-sky-100 to-purple-100 text-sky-800 border border-sky-200 text-[10px] font-bold">
                   خطوة {currentStep} من {totalSteps}
@@ -100,7 +100,7 @@ export const RegistrationOnboardingModal: React.FC = () => {
                     أهلاً بك يا {user.username}! 🎉
                   </h3>
                   <p className="font-body text-xs text-slate-600 mt-1 leading-relaxed">
-                    تم إنشاء حسابك بنجاح في <strong className="text-sky-700 font-extrabold">استوديو دكتور الخطوط</strong>. أنت الآن جاهز لبناء وتصميم وتصدير الخطوط العربية الاحترافية والملونة 3D.
+                    تم إنشاء حسابك بنجاح في <strong className="text-sky-700 font-extrabold">منصة Fonty فونتي</strong>. أنت الآن جاهز لبناء وتصميم وتصدير الخطوط العربية الاحترافية والملونة 3D.
                   </p>
                 </div>
               </div>

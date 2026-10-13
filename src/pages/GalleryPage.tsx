@@ -188,8 +188,6 @@ export const GalleryPage: React.FC = () => {
 
       {/* Header Banner - السحابة (Download Fonts Hub) */}
       <div className="glass-panel rounded-3xl p-6 md:p-8 space-y-4 shadow-lg relative overflow-hidden backdrop-blur-2xl border border-white/80">
-        <div className="absolute top-0 left-0 w-64 h-64 bg-sky-500/10 rounded-full blur-3xl -z-0 pointer-events-none" />
-
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-sky-500/10 border border-sky-200/50 rounded-full text-xs font-semibold text-sky-700">

@@ -1,12 +1,14 @@
 import localforage from 'localforage';
+import { doc, getDoc, getDocs, setDoc, deleteDoc, collection, query, where } from 'firebase/firestore';
 import { FontProject, FontSettings, ColorFontSettings } from '../types';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 
 // Configure localforage for local host & browser IndexedDB storage
 try {
   localforage.config({
-    name: 'DoctorFonts',
+    name: 'Fonty',
     storeName: 'font_projects',
-    description: 'داتابيز التخزين المحلي لخادم واستضافة دكتور الخطوط',
+    description: 'داتابيز التخزين المحلي لخادم واستضافة Fonty فونتي',
     driver: [localforage.INDEXEDDB, localforage.LOCALSTORAGE],
   });
 } catch {
@@ -43,7 +45,7 @@ export const defaultColorFontSettings: ColorFontSettings = {
 export const defaultFontSettings: FontSettings = {
   fontName: 'خط جديد',
   designer: 'مصمم عربي',
-  description: 'خط عربي مخصص تم إنشاؤه عبر دكتور الخطوط',
+  description: 'خط عربي مخصص تم إنشاؤه عبر منصة Fonty فونتي',
   copyright: 'جميع الحقوق محفوظة',
   license: 'OFL',
   advanceWidthMode: 'auto',
@@ -74,7 +76,7 @@ export function createDefaultProject(name: string = 'مشروع خط جديد'):
 }
 
 /**
- * Save project directly to local host storage (IndexedDB / LocalStorage)
+ * Save project to local host storage and sync to Firebase Firestore
  */
 export async function saveProject(project: FontProject): Promise<void> {
   const updatedProject: FontProject = {
@@ -82,21 +84,48 @@ export async function saveProject(project: FontProject): Promise<void> {
     updatedAt: Date.now(),
   };
 
+  // 1. Local caching
   try {
     await localforage.setItem(project.id, updatedProject);
   } catch {
     try {
       localStorage.setItem(`df_proj_${project.id}`, JSON.stringify(updatedProject));
     } catch {
-      console.warn('Unable to persist project to local host storage');
+      console.warn('Unable to persist project to local cache');
+    }
+  }
+
+  // 2. Cloud Firestore persistence
+  if (auth.currentUser) {
+    const ownerId = auth.currentUser.uid;
+    const projectPath = `projects/${project.id}`;
+    try {
+      const docRef = doc(db, 'projects', project.id);
+      await setDoc(
+        docRef,
+        {
+          id: project.id,
+          name: project.name,
+          ownerId,
+          settings: project.settings,
+          glyphs: project.glyphs || [],
+          createdAt: project.createdAt || Date.now(),
+          updatedAt: updatedProject.updatedAt,
+          isPublic: false,
+        },
+        { merge: true }
+      );
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, projectPath);
     }
   }
 }
 
 /**
- * Retrieve a project by ID from local host storage
+ * Retrieve a project by ID from local cache or Firebase Firestore
  */
 export async function getProject(id: string): Promise<FontProject | null> {
+  // Try local first
   try {
     const proj = await localforage.getItem<FontProject>(id);
     if (proj) return proj;
@@ -108,18 +137,38 @@ export async function getProject(id: string): Promise<FontProject | null> {
       // Ignore
     }
   }
+
+  // Try Firestore
+  if (auth.currentUser) {
+    const projectPath = `projects/${id}`;
+    try {
+      const docRef = doc(db, 'projects', id);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        const data = snap.data() as FontProject;
+        // Save to local cache
+        await localforage.setItem(id, data);
+        return data;
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.GET, projectPath);
+    }
+  }
+
   return null;
 }
 
 /**
- * Get all projects from local host storage
+ * Get all projects from local storage and sync with Firestore
  */
 export async function getAllProjects(): Promise<FontProject[]> {
-  const projects: FontProject[] = [];
+  const localProjectsMap = new Map<string, FontProject>();
+
+  // Load from local storage
   try {
     await localforage.iterate((value: FontProject) => {
       if (value && value.id) {
-        projects.push(value);
+        localProjectsMap.set(value.id, value);
       }
     });
   } catch {
@@ -128,24 +177,64 @@ export async function getAllProjects(): Promise<FontProject[]> {
         const key = localStorage.key(i);
         if (key && key.startsWith('df_proj_')) {
           const raw = localStorage.getItem(key);
-          if (raw) projects.push(JSON.parse(raw));
+          if (raw) {
+            const parsed = JSON.parse(raw) as FontProject;
+            if (parsed && parsed.id) localProjectsMap.set(parsed.id, parsed);
+          }
         }
       }
     } catch {
       // Ignore
     }
   }
+
+  // Sync from Firestore if user is authenticated
+  if (auth.currentUser) {
+    const path = 'projects';
+    try {
+      const q = query(collection(db, path), where('ownerId', '==', auth.currentUser.uid));
+      const querySnap = await getDocs(q);
+      querySnap.forEach((docSnap) => {
+        const remoteProj = docSnap.data() as FontProject;
+        if (remoteProj && remoteProj.id) {
+          const localProj = localProjectsMap.get(remoteProj.id);
+          if (!localProj || (remoteProj.updatedAt && remoteProj.updatedAt > localProj.updatedAt)) {
+            localProjectsMap.set(remoteProj.id, remoteProj);
+            localforage.setItem(remoteProj.id, remoteProj).catch(() => {});
+          }
+        }
+      });
+    } catch (err) {
+      // Log or handle Firestore read
+      try {
+        handleFirestoreError(err, OperationType.LIST, path);
+      } catch (e) {
+        console.warn('Firestore fetch projects error:', e);
+      }
+    }
+  }
+
+  const projects = Array.from(localProjectsMap.values());
   return projects.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 /**
- * Delete a project from local host storage
+ * Delete a project from local host storage and Firestore
  */
 export async function deleteProject(id: string): Promise<void> {
   try {
     await localforage.removeItem(id);
   } catch {
     localStorage.removeItem(`df_proj_${id}`);
+  }
+
+  if (auth.currentUser) {
+    const projectPath = `projects/${id}`;
+    try {
+      await deleteDoc(doc(db, 'projects', id));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, projectPath);
+    }
   }
 }
 
@@ -158,22 +247,37 @@ export async function clearAllProjects(): Promise<void> {
 }
 
 /**
- * Helper function for local backup sync
+ * Helper function to sync all local projects to Firebase Firestore
  */
-export async function syncLocalProjectsToSupabase(): Promise<{ synced: number; errors: number }> {
-  // Local host mode: all projects are already stored locally
+export async function syncLocalProjectsToFirestore(): Promise<{ synced: number; errors: number }> {
+  if (!auth.currentUser) {
+    return { synced: 0, errors: 0 };
+  }
+
   const projects = await getAllProjects();
-  return { synced: projects.length, errors: 0 };
+  let synced = 0;
+  let errors = 0;
+
+  for (const proj of projects) {
+    try {
+      await saveProject(proj);
+      synced++;
+    } catch {
+      errors++;
+    }
+  }
+
+  return { synced, errors };
 }
 
 /**
- * Backup / Restore utilities for local host & browser deployment
+ * Backup / Restore utilities
  */
 export async function exportAllProjectsJSON(): Promise<string> {
   const projects = await getAllProjects();
   return JSON.stringify(
     {
-      app: 'DoctorFonts',
+      app: 'Fonty',
       version: '1.0.0',
       exportedAt: new Date().toISOString(),
       projects,

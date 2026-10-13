@@ -4,6 +4,8 @@ import { useAuth, UserAccount } from '../context/AuthContext';
 import { AdminLiveSupportConsole } from '../components/AdminLiveSupportConsole';
 import { AdminFontManager } from '../components/AdminFontManager';
 import { getSupportThreads, SUPPORT_UPDATE_EVENT } from '../utils/supportStorage';
+import { doc, setDoc } from 'firebase/firestore';
+import { db, auth } from '../firebase';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -99,7 +101,13 @@ export const AdminPage: React.FC = () => {
     return localStorage.getItem('df_allow_signups') !== 'false';
   });
   const [announcementMsg, setAnnouncementMsg] = useState<string>(() => {
-    return localStorage.getItem('df_announcement_msg') || 'أهلاً بكم في منصة دكتور الخطوط - النسخة المتقدمة لبناء الخطوط العربية!';
+    const raw = localStorage.getItem('df_announcement_msg');
+    if (raw && raw.includes('دكتور الخطوط')) {
+      const fixed = raw.replace(/دكتور الخطوط/g, 'Fonty فونتي');
+      localStorage.setItem('df_announcement_msg', fixed);
+      return fixed;
+    }
+    return raw || 'أهلاً بكم في منصة Fonty فونتي - النسخة المتقدمة لبناء الخطوط العربية!';
   });
   const [announcementActive, setAnnouncementActive] = useState<boolean>(() => {
     return localStorage.getItem('df_announcement_active') === 'true';
@@ -145,19 +153,33 @@ export const AdminPage: React.FC = () => {
     localStorage.setItem('df_announcement_msg', announcementMsg);
     localStorage.setItem('df_announcement_active', String(announcementActive));
 
+    // Sync to Firebase Firestore
+    if (auth.currentUser) {
+      setDoc(
+        doc(db, 'systemSettings', 'announcements'),
+        {
+          id: 'announcements',
+          announcementMsg,
+          maintenanceMode,
+          allowSignups,
+          updatedAt: new Date().toISOString(),
+          updatedBy: auth.currentUser.uid,
+        },
+        { merge: true }
+      ).catch((err) => console.warn('Firestore settings update note:', err));
+    }
+
     // Log the change
     setLogs((prev) => [
       {
         id: `log_${Date.now()}`,
         time: new Date().toLocaleTimeString('ar-EG'),
         type: 'تحديث الإعدادات',
-        msg: `قام المطور بتحديث الإعدادات (وضع الصيانة: ${maintenanceMode ? 'مفعل' : 'معطل'})`,
+        msg: `تم حفظ وتحديث الإعدادات سحابياً ومحلياً (وضع الصيانة: ${maintenanceMode ? 'مفعل' : 'معطل'})`,
         level: 'warn',
       },
       ...prev,
     ]);
-
-    alert('تم حفظ إعدادات النظام وتحديث التفضيلات بنجاح!');
   };
 
   // Toggle Maintenance Mode handler
@@ -224,14 +246,15 @@ export const AdminPage: React.FC = () => {
     if (!resetModalUser || !resetPasswordInput.trim()) return;
 
     adminUpdateUser(resetModalUser.id, { passwordHash: resetPasswordInput.trim() });
-    alert(`تم تغيير كلمة مرور المستخدم ${resetModalUser.username} بنجاح!`);
+    setResetModalUser(null);
+    setResetPasswordInput('');
 
     setLogs((prev) => [
       {
         id: `log_${Date.now()}`,
         time: new Date().toLocaleTimeString('ar-EG'),
         type: 'إعادة كلمة المرور',
-        msg: `قام المطور بتغيير كلمة المرور للحساب ${resetModalUser.username}`,
+        msg: `تم تغيير كلمة المرور للحساب ${resetModalUser.username} بنجاح`,
         level: 'warn',
       },
       ...prev,
@@ -298,10 +321,10 @@ export const AdminPage: React.FC = () => {
 
   // Font Library Mock Data & Exports
   const fontsList = [
-    { id: 'f_1', name: 'خط الثلث الجلي الحديث', designer: 'طارق محمد', glyphs: 142, status: 'موصى به', file: 'Thuluth_Modern.ttf', downloads: 1420 },
-    { id: 'f_2', name: 'النسخ الرقمي الاحترافي', designer: 'استوديو الخطوط', glyphs: 210, status: 'معتمد', file: 'Naskh_Pro.ttf', downloads: 3890 },
-    { id: 'f_3', name: 'الديواني الذهبي VIP', designer: 'طارق محمد', glyphs: 98, status: 'موصى به', file: 'Diwani_Gold.ttf', downloads: 890 },
-    { id: 'f_4', name: 'الرقعة الرقمي السريع', designer: 'دكتور الخطوط', glyphs: 115, status: 'معتمد', file: 'Ruqaa_Fast.ttf', downloads: 2150 },
+    { id: 'f_1', name: 'خط الثلث الجلي الحديث', designer: 'استوديو Fonty', glyphs: 142, status: 'موصى به', file: 'Thuluth_Modern.ttf', downloads: 1420 },
+    { id: 'f_2', name: 'النسخ الرقمي الاحترافي', designer: 'استوديو Fonty فونتي', glyphs: 210, status: 'معتمد', file: 'Naskh_Pro.ttf', downloads: 3890 },
+    { id: 'f_3', name: 'الديواني الذهبي VIP', designer: 'استوديو Fonty', glyphs: 98, status: 'موصى به', file: 'Diwani_Gold.ttf', downloads: 890 },
+    { id: 'f_4', name: 'الرقعة الرقمي السريع', designer: 'Fonty فونتي', glyphs: 115, status: 'معتمد', file: 'Ruqaa_Fast.ttf', downloads: 2150 },
     { id: 'f_5', name: 'الكوفي الهندسي المربع', designer: 'مختبر المتجهات', glyphs: 88, status: 'معتمد', file: 'Kufi_Square.ttf', downloads: 1760 },
   ];
 
@@ -416,9 +439,6 @@ export const AdminPage: React.FC = () => {
     <div className="min-h-screen pb-32 pt-6 px-4 max-w-7xl mx-auto space-y-8 animate-fadeIn">
       {/* Admin Developer Header (Light Theme) */}
       <div className="bg-gradient-to-br from-white via-sky-50/70 to-indigo-50/60 border border-slate-200/90 rounded-3xl p-6 sm:p-8 text-slate-900 shadow-lg relative overflow-hidden space-y-6">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-sky-400/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-400/10 rounded-full blur-3xl pointer-events-none" />
-
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-amber-800 border border-amber-500/30 text-xs font-bold shadow-xs">
@@ -429,7 +449,7 @@ export const AdminPage: React.FC = () => {
               <span>أهلاً بك، {user?.username}</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 max-w-2xl">
-              منظومة التحكم الشاملة لاستوديو دكتور الخطوط - التحكم بالمستخدمين، التراخيص، تصدير البيانات، وقواعد الصيانة.
+              منظومة التحكم الشاملة لاستوديو Fonty فونتي - التحكم بالمستخدمين، التراخيص، تصدير البيانات، وقواعد الصيانة.
             </p>
           </div>
 
@@ -714,7 +734,7 @@ export const AdminPage: React.FC = () => {
                     حالة المنظومة والترخيص
                   </h3>
                 </div>
-                <span className="text-xs text-slate-600 font-medium">إصدار الدكتور v1.0.0</span>
+                <span className="text-xs text-slate-600 font-medium">إصدار Fonty فونتي v1.0.0</span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -982,18 +1002,23 @@ export const AdminPage: React.FC = () => {
                             {!isDev && (
                               <button
                                 onClick={() => {
-                                  if (window.confirm(`هل أنت متأكد من حذف حساب المستخدم (${u.username}) نهائياً من النظام ومسح جميع بياناته؟`)) {
-                                    const ok = adminDeleteUser(u.id);
-                                    if (ok) {
-                                      reloadUsers();
-                                      alert(`تم حذف حساب المستخدم ${u.username} بنجاح.`);
-                                    } else {
-                                      alert('تعذر حذف هذا الحساب (حساب المطور الرئيسي محمي).');
-                                    }
+                                  const ok = adminDeleteUser(u.id);
+                                  if (ok) {
+                                    reloadUsers();
+                                    setLogs((prev) => [
+                                      {
+                                        id: `log_${Date.now()}`,
+                                        time: new Date().toLocaleTimeString('ar-EG'),
+                                        type: 'حذف مستخدم',
+                                        msg: `تم حذف حساب المستخدم ${u.username}`,
+                                        level: 'warn',
+                                      },
+                                      ...prev,
+                                    ]);
                                   }
                                 }}
                                 title="حذف حساب المستخدم نهائياً"
-                                className="px-2.5 py-1 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 border border-rose-300/50 text-xs font-bold flex items-center gap-1 transition-all"
+                                className="px-2.5 py-1 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 border border-rose-300/50 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
                               >
                                 <IconTrash size={14} />
                                 <span>حذف</span>

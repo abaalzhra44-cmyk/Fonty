@@ -1,3 +1,6 @@
+import { doc, setDoc, getDocs, collection, query, where, deleteDoc } from 'firebase/firestore';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+
 export interface SupportMessage {
   id: string;
   sender: 'user' | 'admin' | 'system';
@@ -22,8 +25,8 @@ export interface SupportThread {
   messages: SupportMessage[];
 }
 
-const THREADS_KEY = 'df_support_threads';
-export const SUPPORT_UPDATE_EVENT = 'df_support_updated';
+const THREADS_KEY = 'fonty_support_threads_v1';
+export const SUPPORT_UPDATE_EVENT = 'fonty_support_updated';
 
 const DEFAULT_INITIAL_THREADS: SupportThread[] = [
   {
@@ -41,7 +44,7 @@ const DEFAULT_INITIAL_THREADS: SupportThread[] = [
         id: 'msg_g1_1',
         sender: 'system',
         senderName: 'فريق الدعم الفني',
-        text: 'مرحباً بك في استوديو دكتور الخطوط! كيف يمكننا مساعدتك اليوم في تصميم أو تصدير خطوطك؟',
+        text: 'مرحباً بك في منصة Fonty فونتي! كيف يمكننا مساعدتك اليوم في تصميم أو تصدير خطوطك؟',
         timestamp: '10:00 ص',
       },
       {
@@ -65,7 +68,7 @@ const DEFAULT_INITIAL_THREADS: SupportThread[] = [
     userId: 'user_guest_2',
     userName: 'مها علي',
     userEmail: 'maha.design@example.com',
-    userRole: 'ممصممة تايبوجرافي',
+    userRole: 'مصممة تايبوجرافي',
     status: 'open',
     unreadCount: 1,
     lastMessage: 'هل يمكن تصدير الخط بصيغة OTF تدعم أشكال البداية والوسط والنهاية تلقائياً؟',
@@ -75,7 +78,7 @@ const DEFAULT_INITIAL_THREADS: SupportThread[] = [
         id: 'msg_g2_1',
         sender: 'system',
         senderName: 'فريق الدعم الفني',
-        text: 'مرحباً بك في استوديو دكتور الخطوط! كيف يمكننا مساعدتك؟',
+        text: 'مرحباً بك في منصة Fonty فونتي! كيف يمكننا مساعدتك؟',
         timestamp: '09:30 ص',
       },
       {
@@ -95,7 +98,7 @@ const DEFAULT_INITIAL_THREADS: SupportThread[] = [
     userRole: 'عضو جديد',
     status: 'resolved',
     unreadCount: 0,
-    lastMessage: 'شكراً جزيلاً لك أستاذ طارق! تم تصدير ملف الخط بنجاح وتجربته في الفوتوشوب.',
+    lastMessage: 'شكراً جزيلاً لفريق Fonty! تم تصدير ملف الخط بنجاح وتجربته.',
     updatedAt: new Date(Date.now() - 120 * 60 * 1000).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
     messages: [
       {
@@ -108,7 +111,7 @@ const DEFAULT_INITIAL_THREADS: SupportThread[] = [
       {
         id: 'msg_g3_2',
         sender: 'admin',
-        senderName: 'طارق محمد (المطور)',
+        senderName: 'فريق Fonty فونتي',
         text: 'وعليكم السلام سارة! تم تعديل ترميز أسماء المحارف وجداول التباعد kerning، يمكنك المحاولة الآن.',
         timestamp: '08:15 ص',
       },
@@ -116,7 +119,7 @@ const DEFAULT_INITIAL_THREADS: SupportThread[] = [
         id: 'msg_g3_3',
         sender: 'user',
         senderName: 'سارة محمود',
-        text: 'شكراً جزيلاً لك أستاذ طارق! تم تصدير ملف الخط بنجاح وتجربته في الفوتوشوب.',
+        text: 'شكراً جزيلاً لفريق Fonty! تم تصدير ملف الخط بنجاح وتجربته.',
         timestamp: '08:20 ص',
       },
     ],
@@ -125,7 +128,7 @@ const DEFAULT_INITIAL_THREADS: SupportThread[] = [
 
 export function getSupportThreads(): SupportThread[] {
   try {
-    const raw = localStorage.getItem(THREADS_KEY);
+    const raw = localStorage.getItem(THREADS_KEY) || localStorage.getItem('df_support_threads');
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -136,7 +139,6 @@ export function getSupportThreads(): SupportThread[] {
     // Ignore parse error
   }
 
-  // Fallback: seed default initial threads
   saveSupportThreads(DEFAULT_INITIAL_THREADS);
   return DEFAULT_INITIAL_THREADS;
 }
@@ -148,34 +150,84 @@ export function saveSupportThreads(threads: SupportThread[]): void {
   } catch {
     // Storage quota or browser restriction
   }
+
+  // Sync to Firestore in background
+  if (auth.currentUser) {
+    threads.forEach(async (thread) => {
+      try {
+        const cleanThread = {
+          id: thread.id,
+          userId: thread.userId || auth.currentUser?.uid || 'guest',
+          userName: thread.userName,
+          userEmail: thread.userEmail || auth.currentUser?.email || '',
+          userRole: thread.userRole || 'عضو',
+          status: thread.status,
+          unreadCount: thread.unreadCount || 0,
+          lastMessage: thread.lastMessage || '',
+          updatedAt: thread.updatedAt || new Date().toISOString(),
+          adminNotes: thread.adminNotes || '',
+          messages: thread.messages || [],
+        };
+        await setDoc(doc(db, 'supportThreads', thread.id), cleanThread, { merge: true });
+      } catch (err) {
+        console.warn('Sync support thread note:', err);
+      }
+    });
+  }
+}
+
+export async function fetchRemoteSupportThreads(): Promise<SupportThread[]> {
+  if (!auth.currentUser) return getSupportThreads();
+
+  try {
+    const path = 'supportThreads';
+    const q = query(collection(db, path));
+    const snap = await getDocs(q);
+    const remoteThreads: SupportThread[] = [];
+    snap.forEach((d) => {
+      remoteThreads.push(d.data() as SupportThread);
+    });
+
+    if (remoteThreads.length > 0) {
+      saveSupportThreads(remoteThreads);
+      return remoteThreads;
+    }
+  } catch (err) {
+    try {
+      handleFirestoreError(err, OperationType.LIST, 'supportThreads');
+    } catch {
+      // Continue gracefully with local cache
+    }
+  }
+
+  return getSupportThreads();
 }
 
 export function getOrCreateThreadForUser(userId?: string, userName?: string, userEmail?: string): SupportThread {
   const threads = getSupportThreads();
-  const idToFind = userId ? `thread_${userId}` : 'thread_current_session';
-  
-  let existing = threads.find((t) => t.id === idToFind || (userId && t.userId === userId));
+  const idToFind = userId ? `thread_${userId.replace(/[^a-zA-Z0-9_-]/g, '_')}` : 'thread_current_session';
+
+  const existing = threads.find((t) => t.id === idToFind || (userId && t.userId === userId));
   if (existing) {
     return existing;
   }
 
-  // Create new thread for user
   const newThread: SupportThread = {
     id: idToFind,
     userId: userId || 'guest_user',
     userName: userName || 'زائر الاستوديو',
-    userEmail: userEmail || 'guest@drfonts.local',
+    userEmail: userEmail || 'guest@fonty.local',
     userRole: 'مستخدم الاستوديو',
     status: 'open',
     unreadCount: 0,
-    lastMessage: 'بدء محادثة دعم جيدة',
+    lastMessage: 'بدء محادثة دعم جديدة',
     updatedAt: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
     messages: [
       {
         id: `msg_welcome_${Date.now()}`,
         sender: 'system',
         senderName: 'فريق الدعم الفني',
-        text: 'مرحباً بك في استوديو دكتور الخطوط! كيف يمكننا مساعدتك اليوم في تصميم أو تصدير خطوطك؟',
+        text: 'مرحباً بك في منصة Fonty فونتي! كيف يمكننا مساعدتك اليوم في تصميم أو تصدير خطوطك؟',
         timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
       },
     ],
@@ -225,7 +277,7 @@ export function addUserMessageToThread(
     const newThread: SupportThread = {
       id: threadId,
       userName: senderName || 'مستخدم الاستوديو',
-      userEmail: userEmail || 'user@drfonts.local',
+      userEmail: userEmail || 'user@fonty.local',
       status: 'pending',
       unreadCount: 1,
       lastMessage: text,
@@ -250,8 +302,8 @@ export function addUserMessageToThread(
 export function addAdminReplyToThread(
   threadId: string,
   text: string,
-  adminName: string = 'طارق محمد (المطور الرئيسي)',
-  adminRole: string = 'المطور الرئيسي'
+  adminName: string = 'إدارة Fonty فونتي',
+  adminRole: string = 'فريق التطوير والدعم'
 ): SupportThread[] {
   const threads = getSupportThreads();
   const nowStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
@@ -322,7 +374,7 @@ export function updateAdminNotes(threadId: string, notes: string): SupportThread
 export function exportThreadToTxt(thread: SupportThread): void {
   const lines: string[] = [];
   lines.push(`====================================================`);
-  lines.push(`تقرير محادثة الدعم الفني - استوديو دكتور الخطوط`);
+  lines.push(`تقرير محادثة الدعم الفني - منصة Fonty فونتي`);
   lines.push(`====================================================`);
   lines.push(`اسم المستخدم: ${thread.userName}`);
   lines.push(`البريد الإلكتروني: ${thread.userEmail || 'غير محدد'}`);
@@ -330,7 +382,7 @@ export function exportThreadToTxt(thread: SupportThread): void {
   lines.push(`حالة المحادثة: ${thread.status}`);
   lines.push(`آخر تحديث: ${thread.updatedAt}`);
   if (thread.adminNotes) {
-    lines.push(`ملاحظات المطور الإدارية: ${thread.adminNotes}`);
+    lines.push(`ملاحظات إدارة المنصة: ${thread.adminNotes}`);
   }
   lines.push(`----------------------------------------------------`);
   lines.push(`سجل الرسائل:`);
@@ -357,5 +409,12 @@ export function deleteSupportThread(threadId: string): SupportThread[] {
   const threads = getSupportThreads();
   const filtered = threads.filter((t) => t.id !== threadId);
   saveSupportThreads(filtered);
+
+  if (auth.currentUser) {
+    deleteDoc(doc(db, 'supportThreads', threadId)).catch((err) => {
+      console.warn('Delete thread error:', err);
+    });
+  }
+
   return filtered;
 }

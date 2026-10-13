@@ -277,7 +277,7 @@ export const AccountPage: React.FC = () => {
       <div className="liquid-glass-card p-6 flex items-center justify-between text-xs text-slate-500 shadow-sm border border-white/80">
         <div className="flex items-center gap-2">
           <IconSparkles size={18} className="text-sky-600" />
-          <span className="font-heading font-bold text-slate-900">Doctor Fonts v1.0.0</span>
+          <span className="font-heading font-bold text-slate-900">Fonty فونتي v1.0.0</span>
         </div>
         <span>جميع الحقوق محفوظة © طارق محمد</span>
       </div>
