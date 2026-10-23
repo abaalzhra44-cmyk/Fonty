@@ -5,13 +5,12 @@ import {
   IconUser,
   IconLogout,
   IconLogIn,
-  IconShield,
   IconFonts,
 } from './icons/Icons';
 import { useAuth } from '../context/AuthContext';
 
 export const TopHeader: React.FC = React.memo(() => {
-  const { user, isLoggedIn, isAdmin, logout, openAuthModal } = useAuth();
+  const { user, isLoggedIn, logout, openAuthModal } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const navigate = useNavigate();
 
@@ -89,20 +88,6 @@ export const TopHeader: React.FC = React.memo(() => {
             >
               المختبر
             </NavLink>
-            {isAdmin && (
-              <NavLink
-                to="/admin"
-                className={({ isActive }) =>
-                  `px-3 py-1 rounded-full transition-all ${
-                    isActive
-                      ? 'bg-amber-500 text-white shadow-xs'
-                      : 'text-amber-700 hover:bg-amber-100/70'
-                  }`
-                }
-              >
-                المطور
-              </NavLink>
-            )}
           </nav>
         )}
 
@@ -125,14 +110,9 @@ export const TopHeader: React.FC = React.memo(() => {
                     {user.username}
                   </span>
                   <span className="text-[10px] text-slate-500">
-                    {isAdmin ? 'مطور المنصة' : 'مصمم خطوط'}
+                    مصمم خطوط
                   </span>
                 </div>
-                {isAdmin && (
-                  <span className="px-1.5 py-0.5 bg-amber-500/15 text-amber-700 text-[10px] font-extrabold rounded-md border border-amber-500/30 sm:hidden">
-                    مطور
-                  </span>
-                )}
                 <svg
                   className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-transform duration-200 ${
                     showMenu ? 'rotate-180' : ''
@@ -164,12 +144,8 @@ export const TopHeader: React.FC = React.memo(() => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1">
                         <p className="font-bold text-slate-900 truncate text-xs">{user.username}</p>
-                        <span
-                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                            isAdmin ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800'
-                          }`}
-                        >
-                          {isAdmin ? 'مطور النظام' : 'مصمم'}
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-800">
+                          عضو المنصة
                         </span>
                       </div>
                       <p className="text-[10px] text-slate-500 truncate mt-0.5">{user.email}</p>
@@ -177,26 +153,6 @@ export const TopHeader: React.FC = React.memo(() => {
                   </div>
 
                   <div className="py-1">
-                    {isAdmin && (
-                      <button
-                        onClick={() => {
-                          setShowMenu(false);
-                          navigate('/admin');
-                        }}
-                        className="w-full text-right px-4 py-2 hover:bg-amber-50/80 text-amber-900 font-bold flex items-center gap-2.5 transition-colors cursor-pointer"
-                      >
-                        <div className="w-6 h-6 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700">
-                          <IconShield size={14} />
-                        </div>
-                        <div className="flex-1 text-right">
-                          <p className="text-xs">مركز تحكم المطور والإدارة</p>
-                          <p className="text-[10px] text-amber-600/80 font-normal">
-                            إدارة الحسابات وقاعدة البيانات
-                          </p>
-                        </div>
-                      </button>
-                    )}
-
                     <button
                       onClick={() => {
                         setShowMenu(false);

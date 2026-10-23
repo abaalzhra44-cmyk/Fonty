@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, testFirestoreConnection, syncDomainConfigToFirestore } from './firebase';
@@ -19,7 +19,6 @@ import { InspectorPage } from './pages/InspectorPage';
 import { ComparePage } from './pages/ComparePage';
 import { MyFontsPage } from './pages/MyFontsPage';
 import { AccountPage } from './pages/AccountPage';
-import { AdminPage } from './pages/AdminPage';
 import { MaintenancePage } from './pages/MaintenancePage';
 
 const pageVariants = {
@@ -74,7 +73,8 @@ const AnimatedRoutes: React.FC = () => {
           <Route path="/compare" element={<ComparePage />} />
           <Route path="/my-fonts" element={<MyFontsPage />} />
           <Route path="/account" element={<AccountPage />} />
-          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/admin" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </motion.div>
     </AnimatePresence>

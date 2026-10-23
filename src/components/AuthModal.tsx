@@ -77,7 +77,7 @@ export const AuthModal: React.FC = React.memo(() => {
     setIsGoogleLoading(true);
     try {
       const res = await loginWithGoogle();
-      if (!res.success && res.error) {
+      if (!res.success && res.error && !res.cancelled) {
         setErrorMsg(res.error);
       }
     } catch {

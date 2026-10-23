@@ -119,5 +119,12 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidId(logId) && isValidAuditLog(incoming());
       allow update, delete: if isAdmin();
     }
+
+    // 7. Font Exports telemetry collection
+    match /fontExports/{exportId} {
+      allow get, list: if isAdmin();
+      allow create: if true;
+      allow update, delete: if isAdmin();
+    }
   }
 }

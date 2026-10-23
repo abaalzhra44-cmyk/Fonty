@@ -49,7 +49,7 @@ interface AuthContextType {
   isDeveloper: boolean;
   signup: (data: { username: string; email: string; password: string; avatarUrl?: string }) => { success: boolean; error?: string };
   login: (data: { identifier: string; password: string }) => { success: boolean; error?: string };
-  loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  loginWithGoogle: () => Promise<{ success: boolean; error?: string; cancelled?: boolean }>;
   logout: () => Promise<void>;
   updateProfile: (data: { username?: string; avatarUrl?: string; password?: string }) => Promise<{ success: boolean; error?: string }>;
   getAllUsers: () => UserAccount[];
@@ -191,18 +191,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  const loginWithGoogle = async (): Promise<{ success: boolean; error?: string }> => {
+  const loginWithGoogle = async (): Promise<{ success: boolean; error?: string; cancelled?: boolean }> => {
     try {
       const fbUser = await signInWithGoogle();
       if (!fbUser) {
-        return { success: false, error: 'تعذر إتمام تسجيل الدخول عبر Google' };
+        // User closed or dismissed the popup without completing sign in
+        return { success: false, cancelled: true };
       }
       setShowAuthModal(false);
       setShowWelcomeBack(true);
       return { success: true };
-    } catch (err: unknown) {
+    } catch (err: any) {
+      if (
+        err?.code === 'auth/popup-closed-by-user' ||
+        err?.code === 'auth/cancelled-popup-request' ||
+        err?.code === 'auth/user-cancelled'
+      ) {
+        return { success: false, cancelled: true };
+      }
       console.error('Google Sign In error:', err);
-      const msg = err instanceof Error ? err.message : 'فشل تسجيل الدخول باستخدام Google';
+      let msg = 'فشل تسجيل الدخول باستخدام Google';
+      if (err?.code === 'auth/popup-blocked') {
+        msg = 'تم حظر النافذة المنبثقة من قبل المتصفح. يرجى السماح بالنوافذ المنبثقة والمحاولة مرة أخرى.';
+      } else if (err?.code === 'auth/network-request-failed') {
+        msg = 'تعذر الاتصال بالشبكة. يرجى التحقق من اتصال الإنترنت.';
+      } else if (err instanceof Error && err.message) {
+        msg = err.message;
+      }
       return { success: false, error: msg };
     }
   };

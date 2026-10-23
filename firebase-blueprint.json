@@ -94,6 +94,21 @@
         "actorUid": { "type": "string", "description": "UID of initiating user or admin", "maxLength": 128 }
       },
       "required": ["id", "type", "msg"]
+    },
+    "FontExport": {
+      "title": "FontExport",
+      "description": "Font compilation and export telemetry event",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Export log ID", "maxLength": 128 },
+        "userId": { "type": "string", "description": "UID of user who exported font", "maxLength": 128 },
+        "fontName": { "type": "string", "description": "Name of exported font", "maxLength": 150 },
+        "format": { "type": "string", "description": "Format e.g. TTF or COLR-TTF", "maxLength": 50 },
+        "glyphsCount": { "type": "number", "description": "Count of glyphs compiled" },
+        "fileSizeBytes": { "type": "number", "description": "Compiled file size in bytes" },
+        "timestamp": { "type": "string", "description": "ISO timestamp of export event" }
+      },
+      "required": ["id", "fontName", "format", "timestamp"]
     }
   },
   "firestore": {
@@ -120,6 +135,10 @@
     "/auditLogs/{logId}": {
       "schema": "AuditLog",
       "description": "Real-time audit log stream for developers and administrators"
+    },
+    "/fontExports/{exportId}": {
+      "schema": "FontExport",
+      "description": "Telemetry collection recording client font downloads and exports"
     }
   }
 }
